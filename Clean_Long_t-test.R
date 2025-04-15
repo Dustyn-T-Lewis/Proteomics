@@ -1,6 +1,4 @@
-# ----------------------------------------
-# Proteomic Data Processing & T-Test Pipeline
-# ----------------------------------------
+#### Proteomic Data Processing & T-Test Pipeline ####
 
 # ---- Load Required Libraries ----
 library(readxl)     # Read Excel files
@@ -92,9 +90,7 @@ long_df <- sarco_clean %>%
 write.csv(long_df, "Clean_Long2.csv", row.names = FALSE)
 write.csv(sarco_clean, "Clean_Wide2.csv", row.names = FALSE)
 
-# ----------------------------------------
-# 6. Statistical Comparison
-# ----------------------------------------
+#### 6. Statistical Comparison ####
 
 # ---- 6a. Unpaired T-Tests: Young vs MA Pre ----
 results1 <- intersect(
@@ -137,3 +133,58 @@ results2 <- intersect(
 # ---- Output Results ----
 print(results1)
 print(results2)
+
+#### 7. Bioinformatics via Panther ####
+
+# FILTER by p < 0.01 for highly significant protein results
+sig1 <- results1 %>% filter(p_value < 0.01)  # Young vs MA Pre
+sig2 <- results2 %>% filter(p_value < 0.01)  # MA Pre vs Post
+
+# FILTER by 0.01 ≤ p < 0.05 for "approaching" significance
+sig3 <- results1 %>% filter(p_value >= 0.01 & p_value < 0.05)
+sig4 <- results2 %>% filter(p_value >= 0.01 & p_value < 0.05)
+
+
+# SPLIT SIGNIFICANT into UP and DOWN regulated genes
+results1_up_significant   <- sig1 %>% filter(Change > 0) %>% pull(Gene_Symbol) %>% unique()
+results1_down_significant <- sig1 %>% filter(Change < 0) %>% pull(Gene_Symbol) %>% unique()
+
+results2_up_significant   <- sig2 %>% filter(Change > 0) %>% pull(Gene_Symbol) %>% unique()
+results2_down_significant <- sig2 %>% filter(Change < 0) %>% pull(Gene_Symbol) %>% unique()
+
+# SPLIT APPROACHING SIGNIFICANCE into UP and DOWN
+results1_up_approaching   <- sig3 %>% filter(Change > 0) %>% pull(Gene_Symbol) %>% unique()
+results1_down_approaching <- sig3 %>% filter(Change < 0) %>% pull(Gene_Symbol) %>% unique()
+
+results2_up_approaching   <- sig4 %>% filter(Change > 0) %>% pull(Gene_Symbol) %>% unique()
+results2_down_approaching <- sig4 %>% filter(Change < 0) %>% pull(Gene_Symbol) %>% unique()
+
+# WRITE to text files for PANTHER (SIGNIFICANT RESULTS)
+write.table(results1_up_significant,   "Y_vs_Pre_UP_significant.txt",   row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(results1_down_significant, "Y_vs_Pre_DOWN_significant.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(results2_up_significant,   "Pre_vs_Post_UP_significant.txt",  row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(results2_down_significant, "Pre_vs_Post_DOWN_significant.txt",row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+# WRITE to text files for PANTHER (APPROACHING RESULTS)
+write.table(results1_up_approaching,   "Y_vs_Pre_UP_approaching.txt",   row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(results1_down_approaching, "Y_vs_Pre_DOWN_approaching.txt", row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(results2_up_approaching,   "Pre_vs_Post_UP_approaching.txt",  row.names = FALSE, col.names = FALSE, quote = FALSE)
+write.table(results2_down_approaching, "Pre_vs_Post_DOWN_approaching.txt",row.names = FALSE, col.names = FALSE, quote = FALSE)
+
+
+# Ready for subsequent PANTHER analysis
+
+#### Gene Enrichment of gene sets ####
+young_df <- results1 %>%
+  select(Gene_Symbol, Abundance = Young_Mean)
+
+pre_df <- results1 %>%
+  select(Gene_Symbol, Abundance = Pre_MA_Mean)
+
+post_df <- results2 %>%
+  select(Gene_Symbol, Abundance = Post_MA_Mean)
+
+# Write to CSV files
+write_tsv(young_df, "young_mean_abundance.txt")
+write_tsv(pre_df, "pre_ma_mean_abundance.txt")
+write_tsv(post_df, "post_ma_mean_abundance.txt")
