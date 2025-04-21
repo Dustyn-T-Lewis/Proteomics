@@ -8,29 +8,40 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Overview
-
-This  walks through a full pipeline to clean, enrich, reshape, and analyze my proteomic data from Excel format to long-format and perform group comparisons using t-tests. 
-
-# 1. Load Required Libraries
+# SECTION 1: Load Required Libraries
 
 ```{r}
-library(readxl)
-library(dplyr)
-library(stringr)
-library(tidyr)
-library(httr)
-library(jsonlite)
-library(purrr)
+library(readxl)     # Read Excel files
+library(dplyr)      # Data wrangling
+library(stringr)    # String operations
+library(tidyr)      # Reshaping data
+library(httr)       # HTTP requests
+library(jsonlite)   # JSON parsing
+library(purrr)      # Functional programming
 ```
 
-- %>% is the pipe operator from dplyr — it passes the output of one function into the next.
+`library(readxl)` 
+- loads the `readxl` package allowing `.xlsx` files to be imported from excel and allows `read_excel()` function.
 
-- library(x) loads a package so you can use its functions.
+`library(dplyr)`
+- loads the `dplyr` package allowing for data wrangling and manipulation/transformation techniques with functions like `mutate()`, `filter()`, `select()`, `group_by()`, and `summarize()`.
 
-- :: can be used to directly call a function (e.g., dplyr::filter()), though it’s not needed here because library() was used.
+`library(stingr)`
+- loads the `stingr` package that allows for string manipulations via functions like `str_extract()`, `str_remove()`, `str_detect()`.
 
-# 2. Load and Preprocess Raw Data
+`library(tidyr)`
+- loads the `tidyr` package which allows reshaping of data into or from wide to long format with functions like `pivot_longer()` or `pivot_shorter()`.
+
+`library(httr)`
+- loads the `httr` package which enables requests to APIs which will be used later for reproducible querying of UniProt API with functions like `GET()`.
+
+`library(jsonlite)`
+- loads `jsonelite` package for turning JSON responses into R-readable data frames or lists with functions like `content(..., as = "parsed", type = "application/json")`.
+
+`library(purrr)`
+- loads `purrr` package to allow functions to be mapped or applied acorss a vector and have combined results with fuctions like `map_dfr()`.
+
+# SECTION 2: Load & Clean Data
 
 ```{r}
 sarco <- read_excel("13_MASTER_SEER proteome analysis (4-4-23).xlsx", sheet = "MASTER_SARCO_data") %>%
@@ -40,41 +51,50 @@ sarco <- read_excel("13_MASTER_SEER proteome analysis (4-4-23).xlsx", sheet = "M
     Gene_Symbol = str_extract(Gene_protein, "^[^_;]+") %>% str_remove(";?GN=+$"),
     Accession   = str_extract(Gene_protein, "\\b[A-Z][0-9][A-Z0-9]{3}[0-9]\\b")
   )
-
-sample_cols <- grep("^(EAA|PRE|POST|PPS)", names(sarco), value = TRUE)
-sarco <- sarco %>% mutate(detection_score = rowSums(across(all_of(sample_cols)), na.rm = TRUE))
 ```
 
-Functions used:
+`sarco <- read_excel("13_MASTER_SEER proteome analysis (4-4-23).xlsx", sheet = "MASTER_SARCO_data")`
+- reads the excel spreadsheet and specific sheet with arguments like "13_MASTER_SEER proteome analysis (4-4-23).xlsx" as the file path, and "sheet = "MASTER_SARCO_data" which specifies the sheet to load.
+- a `tibble` is returned with proteomic data
 
-- read_excel() — loads an Excel sheet as a data frame.
-
-- select(where(...)) — keeps only columns that have at least one non-NA value.
-
-- filter(if_any(...)) — keeps only rows where at least one column has a non-NA value.
-
-- mutate() — adds or modifies columns.
-
-- str_extract() — extracts substrings matching a regex (e.g. first part of gene name).
-
-- str_remove() — removes regex-matched patterns (e.g., suffixes like ";GN=").
-
-Regex explained:
-
-- "^[^_;]+" = match everything from the start of the string until a ; or _
-
-- "\\b[A-Z][0-9][A-Z0-9]{3}[0-9]\\b" = match UniProt accession format
-
-# 3. Query UniProt for Missing Gene Symbols
+`%>% select(where(~any(!is.na(.))))`
+- function `select()` is used to select for columns with `where(~any(!is.na(.)))` which is an argument that specifies columns that have at least one non-NA value are selected. Thus, empty columns are removed.
+  - `~` is used to create a transient "anonymous" function.
+  - `!is.na(.)` is used as a logical operator to check for there *not* being any missing values for a current column (`.`).
+  
+`%>% filter(if_any(everything(), ~ !is.na(.)))` 
+- function `filter()` is used to select for rows with `if_any(everything(), ~ !is.na(.))` argument which specifies the rows where at least one column is non-NA are kept. Thus, empty rows are removed.
+  - this function pertains more to this current data frame given that some rows are indeed empty
+  
+`mutate(...)`
+- this function creates 2 new columns: 1) Gene_Symbol & 2) Accession. These are extracted using `str_extract()`, `str_remove`, and `Regex` logic.
+  1) 
+  2) 
+# SECTION 3: Identify Sample Columns and Calculate Detection Score
 
 ```{r}
+sample_cols <- grep("^(EAA|PRE|POST|PPS)", names(sarco), value = TRUE)
+sarco <- sarco %>% mutate(detection_score = rowSums(across(all_of(sample_cols)), na.rm = TRUE))
+
+```
+
+
+
+# SECTION 4: Query UniProt for Missing Gene Symbols
+
+```{r}
+# Step 1: Find Missing Gene Symbols
 accessions_to_query <- sarco %>%
   group_by(Accession, Gene_Symbol) %>%
   slice_max(detection_score, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
   filter(is.na(Gene_Symbol) | Gene_Symbol == "") %>%
   pull(Accession) %>% unique() %>% na.omit()
+```
 
+
+```{r}
+# Step 2: Define the Query Function
 query_uniprot <- function(accessions) {
   url <- "https://rest.uniprot.org/uniprotkb/search"
   q <- paste(accessions, collapse = " OR ")
@@ -88,69 +108,17 @@ query_uniprot <- function(accessions) {
     )
   } else stop("UniProt query failed")
 }
+```
 
+
+```{r}
+# Step 3: Run the Query on Batches
 uniprot_results <- accessions_to_query %>%
   split(ceiling(seq_along(.) / 100)) %>%
   map_dfr(query_uniprot) %>%
   distinct(Accession, .keep_all = TRUE)
 ```
 
-Filter Accessions Needing Enrichment:
-
-- group_by() / slice_max() = keeps highest detection per (Accession, Gene_Symbol)
-
-- pull() = extracts a column as a vector
-
-- unique() = removes duplicates
-
-- na.omit() = removes NAs
-
-UniProt Query Function:
-
-- Uses httr::GET() to send a query to UniProt's API.
-
-- Parses the JSON response using jsonlite::content().
-
-- Extracts the accession and primary gene name from nested JSON.
-
-Batch Query:
-
-- split() breaks the list into batches of 100
-
-- map_dfr() applies query_uniprot() to each batch and row-binds the results
-
-
-# 4. Merge Gene Symbols & Deduplicate
-
-```{r}
-sarco <- sarco %>%
-  left_join(uniprot_results, by = "Accession") %>%
-  mutate(
-    Gene_Symbol = if_else(is.na(Gene_Symbol) | Gene_Symbol == "", Gene_Symbol_API, Gene_Symbol),
-    Gene_Symbol = str_remove(Gene_Symbol, "^isoform_")
-  ) %>%
-  select(-Gene_Symbol_API)
-
-sarco_clean <- sarco %>%
-  group_by(Accession, Gene_Symbol) %>%
-  slice_max(detection_score, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  group_by(Gene_Symbol) %>%
-  slice_max(detection_score, n = 1, with_ties = FALSE) %>%
-  ungroup()
-```
-
-Merge:
-
-- left_join() = merges by Accession
-
-- if_else() = replaces blank or missing Gene_Symbol with value from API
-
-- str_remove("isoform_") = cleans up isoform prefix if present
-
-Merge:
-
-- Keeps highest detection per Accession–Gene_Symbol pair and highest detection per gene overall
 
 # 5. Convert to Long Format
 
