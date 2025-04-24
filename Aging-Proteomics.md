@@ -18,17 +18,7 @@ output:
 ---
 
 
-```{r setup, echo=FALSE}
-knitr::opts_chunk$set(
-  # render at 8×6 inches with high resolution
-  fig.width  = 8,
-  fig.height = 6,
-  dpi        = 300,
-  # display at full text width
-  out.width  = "100%",
-  out.height = "auto"
-)
-```
+
 
 ## SECTION 0: Load Required Libraries
 
@@ -36,7 +26,8 @@ knitr::opts_chunk$set(
 
 - Define all of the R packages needed for my analysis, install any that are missing (distinguishing between CRAN and Bioconductor packages), and then loads them into the session.
 
-```{r, results='hide'}
+
+``` r
 # ---- 0. Load Required Libraries ----  # Section header
 # Define and install required libraries
 required_packages <- c(
@@ -69,10 +60,281 @@ for (pkg in required_packages) {
     }
   }
 }
+```
 
+```
+## 
+```
+
+```
+## 
+```
+
+``` r
 # Load libraries
 invisible(lapply(required_packages, library, character.only = TRUE))
+```
 
+```
+## Warning: package 'readxl' was built under R version 4.4.3
+```
+
+```
+## Warning: package 'dplyr' was built under R version 4.4.3
+```
+
+```
+## 
+## Attaching package: 'dplyr'
+```
+
+```
+## The following objects are masked from 'package:stats':
+## 
+##     filter, lag
+```
+
+```
+## The following objects are masked from 'package:base':
+## 
+##     intersect, setdiff, setequal, union
+```
+
+```
+## Warning: package 'jsonlite' was built under R version 4.4.3
+```
+
+```
+## 
+## Attaching package: 'purrr'
+```
+
+```
+## The following object is masked from 'package:jsonlite':
+## 
+##     flatten
+```
+
+```
+## Warning: package 'broom' was built under R version 4.4.3
+```
+
+```
+## ReactomePA v1.50.0 Learn more at https://yulab-smu.top/contribution-knowledge-mining/
+## 
+## Please cite:
+## 
+## Guangchuang Yu, Qing-Yu He. ReactomePA: an R/Bioconductor package for
+## reactome pathway analysis and visualization. Molecular BioSystems.
+## 2016, 12(2):477-479
+```
+
+```
+## clusterProfiler v4.14.6 Learn more at https://yulab-smu.top/contribution-knowledge-mining/
+## 
+## Please cite:
+## 
+## Guangchuang Yu, Li-Gen Wang, Yanyan Han and Qing-Yu He.
+## clusterProfiler: an R package for comparing biological themes among
+## gene clusters. OMICS: A Journal of Integrative Biology. 2012,
+## 16(5):284-287
+```
+
+```
+## 
+## Attaching package: 'clusterProfiler'
+```
+
+```
+## The following object is masked from 'package:purrr':
+## 
+##     simplify
+```
+
+```
+## The following object is masked from 'package:stats':
+## 
+##     filter
+```
+
+```
+## Loading required package: AnnotationDbi
+```
+
+```
+## Loading required package: stats4
+```
+
+```
+## Loading required package: BiocGenerics
+```
+
+```
+## 
+## Attaching package: 'BiocGenerics'
+```
+
+```
+## The following objects are masked from 'package:dplyr':
+## 
+##     combine, intersect, setdiff, union
+```
+
+```
+## The following objects are masked from 'package:stats':
+## 
+##     IQR, mad, sd, var, xtabs
+```
+
+```
+## The following objects are masked from 'package:base':
+## 
+##     anyDuplicated, aperm, append, as.data.frame, basename, cbind,
+##     colnames, dirname, do.call, duplicated, eval, evalq, Filter, Find,
+##     get, grep, grepl, intersect, is.unsorted, lapply, Map, mapply,
+##     match, mget, order, paste, pmax, pmax.int, pmin, pmin.int,
+##     Position, rank, rbind, Reduce, rownames, sapply, saveRDS, setdiff,
+##     table, tapply, union, unique, unsplit, which.max, which.min
+```
+
+```
+## Loading required package: Biobase
+```
+
+```
+## Welcome to Bioconductor
+## 
+##     Vignettes contain introductory material; view with
+##     'browseVignettes()'. To cite Bioconductor, see
+##     'citation("Biobase")', and for packages 'citation("pkgname")'.
+```
+
+```
+## 
+## Attaching package: 'Biobase'
+```
+
+```
+## The following object is masked from 'package:httr':
+## 
+##     content
+```
+
+```
+## Loading required package: IRanges
+```
+
+```
+## Loading required package: S4Vectors
+```
+
+```
+## 
+## Attaching package: 'S4Vectors'
+```
+
+```
+## The following object is masked from 'package:clusterProfiler':
+## 
+##     rename
+```
+
+```
+## The following object is masked from 'package:tidyr':
+## 
+##     expand
+```
+
+```
+## The following objects are masked from 'package:dplyr':
+## 
+##     first, rename
+```
+
+```
+## The following object is masked from 'package:utils':
+## 
+##     findMatches
+```
+
+```
+## The following objects are masked from 'package:base':
+## 
+##     expand.grid, I, unname
+```
+
+```
+## 
+## Attaching package: 'IRanges'
+```
+
+```
+## The following object is masked from 'package:clusterProfiler':
+## 
+##     slice
+```
+
+```
+## The following object is masked from 'package:purrr':
+## 
+##     reduce
+```
+
+```
+## The following objects are masked from 'package:dplyr':
+## 
+##     collapse, desc, slice
+```
+
+```
+## The following object is masked from 'package:grDevices':
+## 
+##     windows
+```
+
+```
+## 
+## Attaching package: 'AnnotationDbi'
+```
+
+```
+## The following object is masked from 'package:clusterProfiler':
+## 
+##     select
+```
+
+```
+## The following object is masked from 'package:dplyr':
+## 
+##     select
+```
+
+```
+## enrichplot v1.26.6 Learn more at https://yulab-smu.top/contribution-knowledge-mining/
+## 
+## Please cite:
+## 
+## T Wu, E Hu, S Xu, M Chen, P Guo, Z Dai, T Feng, L Zhou, W Tang, L Zhan,
+## X Fu, S Liu, X Bo, and G Yu. clusterProfiler 4.0: A universal
+## enrichment tool for interpreting omics data. The Innovation. 2021,
+## 2(3):100141
+```
+
+```
+## Warning: package 'ggplot2' was built under R version 4.4.3
+```
+
+```
+## Warning: package 'fmsb' was built under R version 4.4.3
+```
+
+```
+## Warning: package 'BiocManager' was built under R version 4.4.3
+```
+
+```
+## Bioconductor version '3.20' is out-of-date; the current release version '3.21'
+##   is available with R version '4.5'; see https://bioconductor.org/install
 ```
 
 *Step-by-step Breakdown*
@@ -109,7 +371,8 @@ invisible(lapply(required_packages, library, character.only = TRUE))
 
 - Read in the proteomics data from Excel, remove any rows or columns that are entirely NA, and then parse out the gene symbol and protein accession from a identifier column. Then, compute a simple “detection score” by summing up presence/abundance values across all sample columns.
 
-```{r}
+
+``` r
 # ---- 1. Load & Clean Data ----
 # Load data from Excel, remove empty rows/columns, and extract gene/protein details
 sarco <- read_excel(
@@ -191,7 +454,8 @@ sarco <- sarco %>%
 
 - Define a function to retrieve missing gene symbols by querying the UniProt REST API for a list of protein accession IDs, and then apply this function to those accessions in my dataset that lack an assigned Gene_Symbol.
 
-```{r}
+
+``` r
 # ---- 2. Query UniProt for Missing Gene Symbols ----
 
 # Define UniProt query function
@@ -316,7 +580,8 @@ uniprot_results <- accessions_to_query %>%
 - Join the UniProt‐derived gene symbols back into my main sarco (sarcoplasm) table, uses them to fill any missing or empty original symbols, strip out any "isoform_" prefixes, and then drop the temporary API column.
 
 
-```{r}
+
+``` r
 # ---- 3. Merge and Clean Gene Symbols ----
 # Merge UniProt results and clean up gene symbols
 sarco <- sarco %>%
@@ -368,7 +633,8 @@ stringr: For regex‐based string cleaning with `str_remove()`.
 
 - De-duplicate the sarco dataset by first retaining the entry with the highest detection score for each unique Accession–Gene combination, and then ensuring that each `Gene_Symbol` appears only once by keeping its highest‐scoring record.
 
-```{r}
+
+``` r
 # ---- 4. Remove Duplicates by Detection Score ----
 sarco_clean <- sarco %>%
   # For each (Accession, Gene_Symbol) pair, keep only the row with the highest detection_score
@@ -422,7 +688,8 @@ dplyr: Provides the chaining (`%>%`), grouping (`group_by()`), slice-based selec
 - Reshape the de-duplicated, wide‐format proteomics data into a long‐format table suitable for downstream analysis, add metadata columns for timepoint and experimental group based on sample names, and then save both the long and wide cleaned datasets.
 
 
-```{r}
+
+``` r
 # ---- 5. Convert to Long Format ----
 
 long_df <- sarco_clean %>%
@@ -494,7 +761,8 @@ stringr: String pattern matching with `str_detect()` to identify and exclude unw
 
 - Compute the average protein abundance for each gene across the defined experimental groups (“Young”, “Pre_MA”, “Post_MA”), reshape the results into a wide summary table, and save it as a CSV for later (could use for something else).
 
-```{r}
+
+``` r
 # ---- 6. Summary Table: Mean Abundances ----
 
 mean_abundance_summary <- long_df %>%
@@ -578,7 +846,8 @@ utils (base R): Provides `write.csv()` to export data frames to CSV files.
 
 - Calculate log2 fold-changes between experimental groups for each protein and then perform statistical tests (t-tests) comparing Pre_MA vs Young, Post_MA vs Young, and Post_MA vs Pre_MA. Then, adjust p-values for multiple testing and merges fold-change and statistics into one table.
 
-```{r}
+
+``` r
 # ---- 7. Compute log2FC and Per-Gene Stats ----
 
     # 1. Calculate log2 fold-change from mean abundances
@@ -680,7 +949,8 @@ tibble: Creates the one-row tibbles of p-values in the `do()` call.
 
 - Convert gene symbols to Entrez IDs and then conduct pathway enrichment analyses (KEGG, Reactome, and GO Biological Process) for the “Pre_MA vs Young” comparison to identify biological pathways associated with aging in muscle.
 
-```{r}
+
+``` r
 # ---- 8. Pathway Enrichment Analysis (Aging in Muscle) ----
 
 # 1. Map gene symbols to Entrez IDs using the org.Hs.eg.db annotation database
@@ -690,7 +960,18 @@ entrez_map <- bitr(
   toType   = "ENTREZID",       # Convert to ENTREZID
   OrgDb    = org.Hs.eg.db      # Human annotation package
 )
+```
 
+```
+## 'select()' returned 1:many mapping between keys and columns
+```
+
+```
+## Warning in bitr(gene_stats$Gene_Symbol, fromType = "SYMBOL", toType =
+## "ENTREZID", : 0.79% of input gene IDs are fail to map...
+```
+
+``` r
 # 2. Prepare a named numeric vector of log2 fold-changes for enrichment
 gene_list_Pre_vs_Young <- gene_stats %>%
   inner_join(entrez_map, by = c("Gene_Symbol" = "SYMBOL")) %>%  # Keep only genes with Entrez IDs
@@ -703,7 +984,17 @@ kegg_Pre_vs_Young <- enrichKEGG(
   organism     = "hsa",                            # Human KEGG code
   pvalueCutoff = 0.10                              # Include terms with p ≤ 0.10
 )
+```
 
+```
+## Reading KEGG annotation online: "https://rest.kegg.jp/link/hsa/pathway"...
+```
+
+```
+## Reading KEGG annotation online: "https://rest.kegg.jp/list/pathway/hsa"...
+```
+
+``` r
 # 4. Run Reactome pathway enrichment
 reactome_Pre_vs_Young <- enrichPathway(
   gene         = names(gene_list_Pre_vs_Young),   # Same Entrez IDs
@@ -781,7 +1072,8 @@ magrittr: For the pipe (`%>%`) and the compound expression (`{}`) to set names o
 
 - Generate and display dot plots of the top 15 enriched pathways from the KEGG, Reactome, and GO analyses for the Pre_MA vs Young comparison, labeling each plot with a clear title.
 
-```{r}
+
+``` r
 # ---- 9. Visualize Enrichment Results (Aging in Muscle) ----
 
 # Plot KEGG enrichment results, showing the top 15 pathways
@@ -792,7 +1084,11 @@ print(
   ) +
   ggtitle("KEGG: Pre_MA vs Young (AGING)")  # Add a descriptive title
 )
+```
 
+<img src="Aging-Proteomics_files/figure-html/unnamed-chunk-10-1.png" width="100%" height="auto" />
+
+``` r
 # Plot Reactome enrichment results
 print(
   dotplot(
@@ -801,7 +1097,11 @@ print(
   ) +
   ggtitle("Reactome: Pre_MA vs Young (AGING)")
 )
+```
 
+<img src="Aging-Proteomics_files/figure-html/unnamed-chunk-10-2.png" width="100%" height="auto" />
+
+``` r
 # Plot GO Biological Process enrichment results
 print(
   dotplot(
@@ -811,6 +1111,8 @@ print(
   ggtitle("GO: Pre_MA vs Young (AGING)")
 )
 ```
+
+<img src="Aging-Proteomics_files/figure-html/unnamed-chunk-10-3.png" width="100%" height="auto" />
 
 *Step-by-Step Breakdown*
 
@@ -846,7 +1148,8 @@ grid (implicitly via base R): Manages the display of multiple plots when using `
 
 - Define concise sets of biologically relevant pathways for KEGG, Reactome, and GO so that subsequent plots can focus (“zoom in”) on these specific targets, filtered by p ≤ 0.10.
 
-```{r}
+
+``` r
 # ---- 10. Facetted “Zoom-In” Pathway Plots (p ≤ 0.10 only) ----
 
 # Define pathway targets for aging and training
@@ -898,7 +1201,8 @@ Vectors will be used downstream with packages like dplyr and ggplot2 to filter e
 
 - Define function to extract genes from a specific enriched pathway, filter them by an adjusted-p threshold, assign significance stars, and generate a horizontal bar plot of their log2 fold-changes with clear annotations.
 
-```{r}
+
+``` r
 # ---- 11. Function to create individual zoom-in plots with expanded thresholds ----
 create_zoom_in_plot <- function(enrichment, pathway_name, target_description, contrast, db_name, max_genes = 10) {
   # 1. Locate the exact pathway description; fall back to grep if needed
@@ -1035,7 +1339,8 @@ rlang: Enables the use of `.data[[...]]` for programmatic column access within d
 
 - Loop over defined contrasts (aging) and key pathway sets (KEGG, Reactome, GO), retrieve the corresponding enrichment results, and invokes the `create_zoom_in_plot()` function to produce focused bar plots for each pathway.
 
-```{r}
+
+``` r
 # ---- 12. Generate plots for each database and contrast ----
 
 # Define the contrasts to iterate over: aging (Pre_vs_Young), *could use and alter for other comparisons, but keeping it simple for now*
@@ -1057,7 +1362,11 @@ for (contrast in contrasts) {
     )
   }
 }
+```
 
+<img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-1.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-2.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-3.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-4.png" width="100%" height="auto" />
+
+``` r
 # Reactome pathways: same logic as KEGG but using Reactome target list
 for (contrast in contrasts) {
   for (pathway_name in names(reactome_targets)) {
@@ -1072,7 +1381,11 @@ for (contrast in contrasts) {
     )
   }
 }
+```
 
+<img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-5.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-6.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-7.png" width="100%" height="auto" />
+
+``` r
 # GO Biological Process pathways: loop over GO targets
 for (contrast in contrasts) {
   for (pathway_name in names(go_targets)) {
@@ -1088,6 +1401,8 @@ for (contrast in contrasts) {
   }
 }
 ```
+
+<img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-8.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-9.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-10.png" width="100%" height="auto" /><img src="Aging-Proteomics_files/figure-html/unnamed-chunk-13-11.png" width="100%" height="auto" />
 
 *Step-by-Step Breakdown*
 
