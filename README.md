@@ -24,13 +24,13 @@ This repository contains the R Markdown analysis pipeline for processing, analyz
 
 ```
 ├── README.md                # Main documentation file
-├── data/                    # Raw data files
+├── data                    # Raw data files
 │   ├── master_seer_proteome.xlsx
-├── scripts/                 # R scripts for analysis
+├── scripts                 # R scripts for analysis
 │   ├── Aging-Proteomics.Rmd
 │   ├── Clean_Long_t-test.R
 │   ├── Clean_Long_t-test.Rmd
-├── output/                  # Analysis outputs
+├── output                  # Analysis outputs
 │   ├── Clean_Long2.csv          # Cleaned long-format data
 │   ├── Clean_Wide2.csv          # Cleaned wide-format data
 │   ├── Group_Abundance.csv      # Grouped abundance data
@@ -39,8 +39,9 @@ This repository contains the R Markdown analysis pipeline for processing, analyz
 │   ├── Reactome_Pre_vs_Young_Results.csv  # Reactome pathway enrichment results
 │   ├── Aging-Proteomics.html     # HTML report
 │   ├── Aging-Proteomics.md       # Markdown report
-├── figures/                 # Figures and plots
-│   └── zoom_in_plots/
+├── figures/ 
+|   ├── Pathway plots             # Figures and plots
+│   └── zoom_in_plots
 ```
 
 ---
