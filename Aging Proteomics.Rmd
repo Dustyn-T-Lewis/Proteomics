@@ -1,12 +1,19 @@
 ---
-title: "Aging_Proteomics"
+title: "Aging Proteomics"
 author: "Dustyn Lewis"
 date: "2025-04-23"
 output:
   html_document:
     toc: true
     df_print: paged
+    keep_md: true        
   word_document:
+    toc: true
+    keep_md: true        
+   pdf_document:
+    toc: true
+    keep_md: true        
+  github_document:       
     toc: true
 ---
 ```{r setup, echo=FALSE}
