@@ -234,7 +234,7 @@ Defines a reusable function taking a character vector of UniProt accession IDs.
 
 Joins IDs into a single search string where each ID is separated by OR, matching the UniProt query syntax.
 
-`r <- GET(url, query = list(...))`
+r ` <- GET(url, query = list(...))`
 
 Uses httr’s GET() to call the UniProt REST endpoint, requesting only accession and gene_primary fields in JSON form, up to 500 records.
 
@@ -647,107 +647,6 @@ stats (base R): Provides t.test() for performing two-sample t-tests and p.adjust
 tibble: Creates the one-row tibbles of p-values in the do() call.
 
 stringr: (Indirectly) if any string operations are used elsewhere; not directly called in this section but part of previous cleaning steps.
-
----
-
-## SECTION 8: Pathway Enrichment Analysis (Aging in Muscle)
-
-*Purpose*
-
-- Convert gene symbols to Entrez IDs and then conduct pathway enrichment analyses (KEGG, Reactome, and GO Biological Process) for the “Pre_MA vs Young” comparison to identify biological pathways associated with aging in muscle.
-
-```{r}
-# ---- 8. Pathway Enrichment Analysis (Aging in Muscle) ----
-
-# 1. Map gene symbols to Entrez IDs using the org.Hs.eg.db annotation database
-entrez_map <- bitr(
-  gene_stats$Gene_Symbol,      # Input vector of gene symbols
-  fromType = "SYMBOL",         # Convert from SYMBOL
-  toType   = "ENTREZID",       # Convert to ENTREZID
-  OrgDb    = org.Hs.eg.db      # Human annotation package
-)
-
-# 2. Prepare a named numeric vector of log2 fold-changes for enrichment
-gene_list_Pre_vs_Young <- gene_stats %>%
-  inner_join(entrez_map, by = c("Gene_Symbol" = "SYMBOL")) %>%  # Keep only genes with Entrez IDs
-  arrange(desc(log2FC_Pre_vs_Young)) %>%                        # Sort descending by effect size
-  { set_names(.$log2FC_Pre_vs_Young, .$ENTREZID) }              # Create named vector: names = ENTREZID, values = log2FC
-
-# 3. Run KEGG pathway enrichment for aging (Pre_MA vs Young)
-kegg_Pre_vs_Young <- enrichKEGG(
-  gene         = names(gene_list_Pre_vs_Young),   # Vector of Entrez IDs
-  organism     = "hsa",                            # Human KEGG code
-  pvalueCutoff = 0.10                              # Include terms with p ≤ 0.10
-)
-
-# 4. Run Reactome pathway enrichment
-reactome_Pre_vs_Young <- enrichPathway(
-  gene         = names(gene_list_Pre_vs_Young),   # Same Entrez IDs
-  organism     = "human",                          # Reactome expects "human"
-  pvalueCutoff = 0.10
-)
-
-# 5. Run Gene Ontology (Biological Process) enrichment
-go_Pre_vs_Young <- enrichGO(
-  gene         = names(gene_list_Pre_vs_Young),   # Entrez IDs
-  OrgDb        = org.Hs.eg.db,                     # Annotation database
-  ont          = "BP",                             # Ontology: Biological Process
-  pvalueCutoff = 0.10
-)
-
-# 6. Collect all results into a single list for easy access
-enrichment_results <- list(
-  KEGG_Pre_vs_Young     = kegg_Pre_vs_Young,
-  Reactome_Pre_vs_Young = reactome_Pre_vs_Young,
-  GO_Pre_vs_Young       = go_Pre_vs_Young
-)
-```
-
-*Step-by-Step Breakdown*
-
-`bitr(..., OrgDb = org.Hs.eg.db)`
-
-Uses clusterProfiler’s bitr() to map human gene symbols (SYMBOL) to Entrez IDs (ENTREZID) via the org.Hs.eg.db Bioconductor annotation package.
-
-`inner_join(entrez_map, by = c("Gene_Symbol" = "SYMBOL"))`
-
-Joins gene_stats with entrez_map to retain only genes that successfully mapped to an Entrez ID.
-
-`arrange(desc(log2FC_Pre_vs_Young))`
-
-Orders the joined data frame by descending log₂ fold-change, so the most upregulated aging-associated genes come first.
-
-`{ set_names(.$log2FC_Pre_vs_Young, .$ENTREZID) }`
-
-Constructs a named numeric vector where each element is the log₂ fold-change and its name is the corresponding Entrez ID, as required by enrichment functions like enrichKEGG().
-
-`enrichKEGG(gene = ..., organism = "hsa", pvalueCutoff = 0.10)`
-
-Runs KEGG pathway enrichment using clusterProfiler, specifying human (“hsa”) and including pathways with p-values ≤ 0.10.
-
-`enrichPathway(..., organism = "human")`
-
-Performs Reactome enrichment via ReactomePA’s enrichPathway(), again with a 0.10 p-value threshold.
-
-`enrichGO(..., ont = "BP")`
-
-Executes Gene Ontology Biological Process enrichment using clusterProfiler’s enrichGO(), referencing the org.Hs.eg.db database.
-
-`list(...)`
-
-Aggregates the three enrichment result objects into a named list (enrichment_results) for downstream plotting or inspection.
-
-*Key Packages*
-
-clusterProfiler: Provides functions for enrichment analyses, including bitr(), enrichKEGG(), and enrichGO().
-
-ReactomePA: Supplies enrichPathway() for Reactome database enrichment.
-
-org.Hs.eg.db: Bioconductor annotation package mapping human gene symbols to Entrez IDs.
-
-dplyr: Used for data manipulation (inner_join(), arrange() and pipelining).
-
-magrittr: For the pipe (%>%) and the compound expression ({}) to set names on the vector.
 
 ---
 
