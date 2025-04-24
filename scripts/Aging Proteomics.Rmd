@@ -79,15 +79,15 @@ invisible(lapply(required_packages, library, character.only = TRUE))
 
 1. `required_packages <- c(...)`
 
-- Creates a character vector required_packages containing the names of all packages your script will use.
+- Creates a character vector `required_packages` containing the names of all packages my script uses.
 
 2. `for (pkg in required_packages) { … }`
 
-- Starts a loop that goes through each package name stored in required_packages.
+- Starts a loop that goes through each package name stores in `required_packages.`
 
 3. `if (!requireNamespace(pkg, quietly = TRUE)) { … }`
 
-- Checks whether the package pkg is already installed (without loading it). If not installed, proceeds to the next step.
+- Checks whether the package `pkg` is already installed (without loading it). If not installed, proceeds to the next step.
 
 4. `if (pkg %in% c("ReactomePA", "clusterProfiler", "org.Hs.eg.db", "enrichplot")) { BiocManager::install(pkg, update = FALSE) }`
 
@@ -149,7 +149,7 @@ sarco <- sarco %>%
 
 1. `sarco <- read_excel(..., sheet = "MASTER_SARCO_data")`
 
-- Uses readxl’s `read_excel()` to import the specified worksheet into a data frame called sarco.
+- Uses readxl’s `read_excel()` to import the specified worksheet into a data frame called `sarco.`
 
 2. `dplyr::select(where(~ any(!is.na(.))))`
 
@@ -163,17 +163,17 @@ sarco <- sarco %>%
 
   - `str_extract(Gene_protein, "^[^_;]+")` pulls the first chunk before any semicolon or underscore from Gene_protein.
 
-  - `str_remove(..., ";?GN=+$")` then strips any trailing “;GN=” patterns to clean the gene symbol.
+  - `str_remove(..., ";?GN=+$")` then strips any trailing `“;GN=” `patterns to clean the gene symbol.
 
   - `str_extract(..., "\\b[A-Z][0-9][A-Z0-9]{3}[0-9]\\b")` captures the UniProt-style accession (e.g., “P12345”).
 
 5. `sample_cols <- grep("^(EAA|PRE|POST|PPS)", names(sarco), value = TRUE)`
 
-- Uses base R’s grep() to find all column names starting with “EAA”, “PRE”, “POST”, or “PPS”, storing them for later.
+- Uses base R’s `grep()` to find all column names starting with “EAA”, “PRE”, “POST”, or “PPS”, storing them for later.
 
 6. `mutate(detection_score = rowSums(across(all_of(sample_cols)), na.rm = TRUE))`
 
-- With dplyr’s `across()`, selects the sample columns, then applies base R’s `rowSums()` (ignoring NA) to give each row a total count or abundance score.
+- dplyr’s `across()` selects the sample columns, then applies base `rowSums()` (ignoring NA) to give each row a total count or abundance score.
 
 *Key Packages*
 
@@ -273,7 +273,7 @@ uniprot_results <- accessions_to_query %>%
 
 6. `tibble(Accession = sapply(j$results, …), Gene_Symbol_API = sapply(j$results, …))`
 
-- Iterates through j$results, extracting primaryAccession and the first geneName$value (if present) into a two‐column tibble.
+- Iterates through `j$results`, extracting `primaryAccession` and the first `geneName$value` (if present) into a two‐column tibble.
 
 7. `accessions_to_query <- sarco %>% group_by(...) %>% slice_max(...) %>% filter(...) %>% pull(...) %>% unique() %>% na.omit()`
 
@@ -281,7 +281,7 @@ uniprot_results <- accessions_to_query %>%
 
   - `filter(is.na(Gene_Symbol) | Gene_Symbol == "")` selects only those with missing symbols.
 
-  - `pull(Accession)` extracts the vector of IDs, then unique() and na.omit() clean it.
+  - `pull(Accession)` extracts the vector of IDs, then `unique()` and `na.omit()` clean it.
 
 8. `split(ceiling(seq_along(.) / 100))`
 
@@ -299,11 +299,11 @@ uniprot_results <- accessions_to_query %>%
 
 `httr`: Facilitates HTTP requests (here, `GET()`) and response handling for REST APIs.
 
-`jsonlite`: Underlies JSON parsing; though here httr::content() is used directly, jsonlite is a dependency for parsing.
+`jsonlite`: Underlies JSON parsing; though here `httr::content()` is used directly, jsonlite is a dependency for parsing.
 
 `tibble`: Creates tidy, modern data frames for the API results.
 
-`purrr`: Provides map_dfr() to iterate over list elements and combine results efficiently.
+`purrr`: Provides `map_dfr()` to iterate over list elements and combine results efficiently.
 
 `dplyr`: Used for data wrangling—grouping, filtering, pulling columns, and chaining operations via the pipe.
 
@@ -466,17 +466,17 @@ write.csv(sarco_clean, "Clean_Wide2.csv", row.names = FALSE)
 
 3. `filter(!str_detect(Sample, "_Avg|_StdDev"))`
 
-- Excludes rows where the Sample name indicates an average or standard deviation column (e.g., “_Avg” or “_StdDev”) via stringr’s str_detect().
+- Excludes rows where the Sample name indicates an average or standard deviation column (e.g., “_Avg” or “_StdDev”) via stringr’s `str_detect()`.
 
 4. `mutate(Timepoint = case_when(...), Group = case_when(...))`
 
-  - Adds a Timepoint column labeling each row as “Pre” or “Post” based on whether Sample contains “PRE” or “POST”.
+  - Adds a `Timepoint` column labeling each row as “Pre” or “Post” based on whether Sample contains “PRE” or “POST”.
 
-  - Adds a Group column labeling samples as “Young” if the name contains “EAA” or “PPS”, otherwise “MA” for middle‐aged.
+  - Adds a `Group` column labeling samples as “Young” if the name contains “EAA” or “PPS”, otherwise “MA” for middle‐aged.
 
 5. `write.csv()`
 
-- Exports long_df and the cleaned wide data frame sarco_clean to CSV files for future use.
+- Exports `long_df` and the cleaned wide data frame `sarco_clean` to CSV files for future use.
 
 *Key Packages*
 
@@ -836,8 +836,6 @@ enrichplot: Provides the `dotplot()` function tailored for enrichment result obj
 
 ggplot2: Underpins the plotting system, used here for adding titles (`ggtitle()`) and handling plot objects.
 
-grid (implicitly via base R): Manages the display of multiple plots when using `print()`.
-
 ---
 
 ## SECTION 10: Facetted “Zoom-In” Pathway Plots (p ≤ 0.10 only)
@@ -1003,7 +1001,7 @@ create_zoom_in_plot <- function(enrichment, pathway_name, target_description, co
 
 4. Sort and limit
 
-Orders by descending value (`log2FC`) and retains only the top `max_genes`.
+  - Orders by descending value (`log2FC`) and retains only the top `max_genes`.
 
 5. Plotting
 
