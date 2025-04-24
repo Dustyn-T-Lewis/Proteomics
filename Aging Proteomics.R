@@ -263,7 +263,7 @@ create_zoom_in_plot <- function(enrichment, pathway_name, target_description, co
       significance = case_when(
         .data[[paste0("adj_", contrast)]] < 0.05 ~ "Significant",
         .data[[paste0("adj_", contrast)]] < 0.10 ~ "Near Significant",
-        .data[[paste0("adj_", contrast)]] < 0.20 ~ "Marginally Significant",
+        .data[[paste0("adj_", contrast)]] < 0.20 ~ "Trending",
         TRUE ~ "Not Significant"
       )
     ) %>%
@@ -280,7 +280,7 @@ create_zoom_in_plot <- function(enrichment, pathway_name, target_description, co
       scale_fill_manual(values = c(
         "Significant" = "#D55E00",
         "Near Significant" = "#F0E442",
-        "Marginally Significant" = "#009E73",
+        "Trending" = "#009E73",
         "Not Significant" = "#C0C0C0"
       )) +
       labs(
