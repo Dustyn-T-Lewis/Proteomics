@@ -5,39 +5,76 @@ date: "2025-04-23"
 output: pdf_document
 ---
 
-## SECTION 0: Package Management System
+## SECTION 0: Load Required Libraries
+
+*Purpose* 
+
+- Define all of the R packages needed for my analysis, install any that are missing (distinguishing between CRAN and Bioconductor packages), and then loads them into the session.
+
 ```{r}
-# ---- 0. Load Required Libraries ----
+# ---- 0. Load Required Libraries ----  # Section header
+# Define and install required libraries
 required_packages <- c(
-  "readxl", "stringr", "tidyr", "httr", "jsonlite", "purrr",
-  "tibble", "ggplot2", "forcats", "dplyr", "BiocManager"
+  "readxl",         # reading Excel files
+  "dplyr",          # data manipulation
+  "stringr",        # string operations
+  "tidyr",          # data tidying
+  "httr",           # HTTP requests
+  "jsonlite",       # JSON parsing
+  "purrr",          # functional programming tools
+  "tibble",         # modern data frame structure
+  "broom",          # tidying statistical model output
+  "ReactomePA",     # pathway analysis (Bioconductor)
+  "clusterProfiler",# enrichment analysis (Bioconductor)
+  "org.Hs.eg.db",   # human gene annotation database (Bioconductor)
+  "enrichplot",     # plotting enrichment results (Bioconductor)
+  "ggplot2",        # data visualization
+  "forcats",        # factor level manipulation
+  "fmsb",           # utilities for radar charts and more
+  "BiocManager"     # managing Bioconductor installations
 )
 
-# Install and load required libraries
-install_and_load <- function(packages) {
-  for (pkg in packages) {
-    if (!requireNamespace(pkg, quietly = TRUE)) {
+# Install missing libraries
+for (pkg in required_packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    if (pkg %in% c("ReactomePA", "clusterProfiler", "org.Hs.eg.db", "enrichplot")) {
+      BiocManager::install(pkg, update = FALSE)
+    } else {
       install.packages(pkg)
     }
-    library(pkg, character.only = TRUE)
   }
 }
-install_and_load(required_packages)
+
+# Load libraries
+invisible(lapply(required_packages, library, character.only = TRUE))
+
 ```
 
-*Package Management Explanation* 
+*Step-by-step Breakdown*
 
-- `requireNamespace()`: Checks if package exists without loading it  
-- `install.packages()`: Installs from CRAN using package name string 
-- `library()`: Preferred method for loading packages (vs `require()`)   
-- `Character.only`: Allows package names as strings rather than objects  
+`required_packages <- c(...)`
 
-*Key Packages*
+Creates a character vector required_packages containing the names of all packages your script will use.
 
-- `readxl`: Excel file parsing without Java dependencies  
-- `stringr`: Consistent string manipulation functions  
-- `dplyr`: Grammar of data manipulation using verbs  
-- `purrr`: Functional programming tools for iteration  
+`for (pkg in required_packages) { … }`
+
+Starts a loop that goes through each package name stored in required_packages.
+
+`if (!requireNamespace(pkg, quietly = TRUE)) { … }`
+
+Checks whether the package pkg is already installed (without loading it). If not installed, proceeds to the next step.
+
+`if (pkg %in% c("ReactomePA", "clusterProfiler", "org.Hs.eg.db", "enrichplot")) { BiocManager::install(pkg, update = FALSE) }`
+
+Installs Bioconductor packages via BiocManager::install() without updating other packages.
+
+`else { install.packages(pkg) }`
+
+Installs CRAN packages with install.packages() if they’re not among the specified Bioconductor set.
+
+`invisible(lapply(required_packages, library, character.only = TRUE))`
+
+Loads each package into the R session using library(). Wrapping in invisible() suppresses the usual startup messages. 
 
 ---
 
@@ -45,62 +82,81 @@ install_and_load(required_packages)
 
 *Purpose*
 
-- Read an Excel sheet, remove empty rows and columns, parse out gene symbols and accession IDs, identify measurement columns, compute a per-row detection score, and return both the cleaned data frame and the list of sample columns.
+- Read in the proteomics data from Excel, remove any rows or columns that are entirely NA, and then parse out the gene symbol and protein accession from a identifier column. Then, compute a simple “detection score” by summing up presence/abundance values across all sample columns.
 
 ```{r}
-# ---- 1. Load and Clean Data ----
-
-clean_data <- function(filepath, sheet_name) {
-  sarco <- read_excel(filepath, sheet = sheet_name) %>%
-    dplyr::select(where(~ any(!is.na(.)))) %>% # drop all-NA columns
-    filter(if_any(everything(), ~ !is.na(.))) %>% # drop all-NA rows
-    mutate(
-      Gene_Symbol = str_remove(str_extract(Gene_protein, "^[^_;]+"), ";?GN=+$"), #  grab text before first “;” & remove trailing “;GN=” if present
-      Accession   = str_extract(Gene_protein, "\\b[A-Z][0-9][A-Z0-9]{3}[0-9]\\b") # match UniProt IDs like “P12345”
+# ---- 1. Load & Clean Data ----
+# Load data from Excel, remove empty rows/columns, and extract gene/protein details
+sarco <- read_excel(
+  "13_MASTER_SEER proteome analysis (4-4-23).xlsx",
+  sheet = "MASTER_SARCO_data"
+) %>%
+  # Keep only columns where at least one value is non-NA
+  dplyr::select(where(~ any(!is.na(.)))) %>%
+  # Remove any rows that are entirely NA
+  filter(if_any(everything(), ~ !is.na(.))) %>%
+  # Parse out Gene_Symbol and Accession from the Gene_protein column
+  mutate(
+    Gene_Symbol = str_remove(
+      str_extract(Gene_protein, "^[^_;]+"),
+      ";?GN=+$"
+    ),
+    Accession   = str_extract(
+      Gene_protein,
+      "\\b[A-Z][0-9][A-Z0-9]{3}[0-9]\\b"
     )
-  
-  sample_cols <- grep("^(EAA|PRE|POST|PPS)", names(sarco), value = TRUE)
-  sarco <- sarco %>% mutate(detection_score = rowSums(across(all_of(sample_cols)), na.rm = TRUE))
-  
-  list(sarco = sarco, sample_cols = sample_cols)
-}
+  )
 
-data <- clean_data("13_MASTER_SEER proteome analysis (4-4-23).xlsx", "MASTER_SARCO_data")
-sarco <- data$sarco # cleaned-up data frame
-sample_cols <- data$sample_cols  # names of columns holding measurements
+# Identify which columns correspond to sample measurements
+sample_cols <- grep("^(EAA|PRE|POST|PPS)", names(sarco), value = TRUE)
+
+# Compute a detection score by summing across all sample columns
+sarco <- sarco %>%
+  mutate(
+    detection_score = rowSums(
+      across(all_of(sample_cols)),
+      na.rm = TRUE
+    )
+  )
 ```
 
 *Step-by-Step Breakdown*
 
-1. `read_excel(filepath, sheet = sheet_name)`
-- Reads the specified sheet into a tibble.
+`sarco <- read_excel(..., sheet = "MASTER_SARCO_data")`
 
-2. `select(where(~ any(!is.na(.))))`
-- Keeps only columns with ≥1 non-NA entry.
+Uses readxl’s read_excel() to import the specified worksheet into a data frame called sarco.
 
-3. `filter(if_any(everything(), ~ !is.na(.)))`
-- Drops rows where every column is NA.
+`dplyr::select(where(~ any(!is.na(.))))`
 
-4. `mutate(Gene_Symbol = …, Accession = …)`
-- `str_extract() `pulls out the first token before “;” as the gene name.
-- `str_remove() `strips any trailing “;GN=” artifacts.
-- `str_extract() `with a UniProt regex finds the accession code.
+Selects only those columns in which at least one entry is not NA, effectively dropping empty columns.
 
-5. `grep("^(EAA|PRE|POST|PPS)", names(sarco), value = TRUE)`
-- Creates sample_cols, the list of measurement columns by pattern matching.
+`filter(if_any(everything(), ~ !is.na(.)))`
 
-6. `rowSums(across(all_of(sample_cols)), na.rm = TRUE)`
-- Calculates detection_score per row, treating missing values as zero.
+Keeps only rows where any column has a non-NA value, removing fully empty rows.
 
-7. `list(sarco = …, sample_cols = …)`
-- Returns a named list for easy downstream reference.
+4. `mutate( Gene_Symbol = ..., Accession = ... )`
+
+  - `str_extract(Gene_protein, "^[^_;]+")` pulls the first chunk before any semicolon or underscore from Gene_protein.
+
+  - `str_remove(..., ";?GN=+$")` then strips any trailing “;GN=” patterns to clean the gene symbol.
+
+  - `str_extract(..., "\\b[A-Z][0-9][A-Z0-9]{3}[0-9]\\b")` captures the UniProt-style accession (e.g., “P12345”).
+
+5. `sample_cols <- grep("^(EAA|PRE|POST|PPS)", names(sarco), value = TRUE)`
+
+- Uses base R’s grep() to find all column names starting with “EAA”, “PRE”, “POST”, or “PPS”, storing them for later.
+
+`mutate(detection_score = rowSums(across(all_of(sample_cols)), na.rm = TRUE))`
+
+With dplyr’s across(), selects the sample columns, then applies base R’s rowSums() (ignoring NA) to give each row a total count or abundance score.
 
 *Key Packages*
 
-- readxl: fast Excel import without Java. 
-- dplyr: concise verbs for data manipulation. 
-- stringr: consistent, regex-powered string functions.
-- purrr/tidyselect: used indirectly via if_any() and where() helpers.
+readxl: Importing Excel (XLSX) data directly into R without Java dependencies.
+
+dplyr: Core tools for data frame manipulation—selecting, filtering, mutating, and piping (%>%).
+
+stringr: Convenient functions for regex-based string extraction and removal (str_extract(), str_remove()).
 
 ---
 
@@ -108,596 +164,1048 @@ sample_cols <- data$sample_cols  # names of columns holding measurements
 
 *Purpose*
 
-- This function takes a vector of UniProt accession IDs, pings the UniProt REST API for each one in a single batch, and pulls back the official primary accession plus the corresponding gene symbol. It spits out a neat tibble that fills in any gaps in local `Gene_Symbol` column.
+- Define a function to retrieve missing gene symbols by querying the UniProt REST API for a list of protein accession IDs, and then apply this function to those accessions in my dataset that lack an assigned Gene_Symbol.
 
 ```{r}
 # ---- 2. Query UniProt for Missing Gene Symbols ----
 
+# Define UniProt query function
 query_uniprot <- function(accessions) {
-  url <- "https://rest.uniprot.org/uniprotkb/search"      
-  q   <- paste(accessions, collapse = " OR ") # OR-joined query string            
-    r <- httr::GET(url,query = list( query  = q,
-                                     fields = "accession,gene_primary", # only need these fields          
-                                     format = "json",
-                                     size   = 500 ) ) # batch size limit
-  
-  if (httr::status_code(r) == 200) {
-    j <- httr::content(r, as = "parsed", type = "application/json")  # parse JSON
-    tibble::tibble(Accession = sapply(j$results, function(x) x$primaryAccession),
-                   Gene_Symbol_API = sapply(j$results, function(x)
-        if (!is.null(x$genes[[1]]$geneName$value))
-          x$genes[[1]]$geneName$value
-        else
-          NA_character_ ) )
+  url <- "https://rest.uniprot.org/uniprotkb/search"
+  # Construct OR-separated query string from the vector of accession IDs
+  q <- paste(accessions, collapse = " OR ")
+  # Perform GET request: ask for accession and primary gene name, JSON format, up to 500 entries
+  r <- GET(
+    url,
+    query = list(
+      query  = q,
+      fields = "accession,gene_primary",
+      format = "json",
+      size   = 500
+    )
+  )
+  # If the request is successful, parse JSON and return a tibble of results
+  if (status_code(r) == 200) {
+    j <- httr::content(r, as = "parsed", type = "application/json")
+    tibble(
+      Accession       = sapply(j$results, function(x) x$primaryAccession),
+      Gene_Symbol_API = sapply(
+        j$results,
+        function(x)
+          if (!is.null(x$genes[[1]]$geneName$value))
+            x$genes[[1]]$geneName$value
+          else
+            NA_character_
+      )
+    )
   } else {
-    stop("UniProt query failed with status ", httr::status_code(r))
+    stop("UniProt query failed")
   }
 }
 
-```
-
-*Step-by-Step Breakdown*
-
-1. `url <- "https://rest.uniprot.org/uniprotkb/search"`
-- Sets the base URL for UniProt’s search API.
-
-2. `q <- paste(accessions, collapse = " OR ")`
-- Joins all accession IDs with " OR " so we can fetch them in one call.
-
-3. `r <- httr::GET(url, query = list(query  = q, fields = "accession,gene_primary", format = "json", size   = length(accessions)))`
-- Asks UniProt for just the accession and primary gene name, in JSON, up to the number of IDs you passed.
-
-4. `if (httr::status_code(r) != 200) stop("UniProt query failed…")`
-- Stops with an error if the API didn’t return a 200 OK.
-
-5. `j <- httr::content(r, as = "parsed", type = "application/json")`
-- Converts the raw JSON into an R list.
-
-6. `tibble::tibble( Accession = sapply (j$results, `[[`,"primaryAccession") Gene_Symbol_API=sapply (j$results, function(x) { if (!is.null(x$genes[[1]]$geneName$value)) x$genes[[1]]$geneName$value else NA_character_} ))`
-- Loops over each result, pulling out the accession and the first geneName (or NA if it’s missing).
-
-*Key Packages*
-
-- httr: Makes HTTP requests easy and gives you helpers like `GET()`, `status_code()` and `content()`.
-
-- jsonlite: Under the hood of `httr::content()`, it parses JSON into R lists.
-
-- tibble: Creates a clean, column-based output that plays nicely with the tidyverse.
-
-## SECTION 2.1: Picking & Querying Missing Accessions
-
-*Purpose*
-
-- It finds all UniProt IDs in `sarco` table that lack a gene symbol, then chunks them into batches of 100 and sends each batch off to UniProt’s API.  Finally, it glues together all the results and makes sure you’ve only got one row per accession.
-
-
-```{r}
-# Process UniProt queries
-
-# Finding accession without a local Gne_Symbol (some are missing)
+# Identify accessions requiring a UniProt query:
+#  1. For each (Accession, existing Gene_Symbol) pair, keep the row with highest detection_score
+#  2. Filter those with missing or empty Gene_Symbol
+#  3. Extract unique accession IDs
 accessions_to_query <- sarco %>%
-  group_by(Accession, Gene_Symbol) %>% # look at each unique pair
-  slice_max(detection_score, n = 1, with_ties = FALSE) %>% # keep the best-measured row
-  ungroup() %>% # drop grouping
-  filter(is.na(Gene_Symbol) | Gene_Symbol == "") %>% # only those missing a symbol
-  pull(Accession) %>% unique() %>% na.omit() # extract just the IDs, remove duplicates, drop any NA
+  group_by(Accession, Gene_Symbol) %>%
+  slice_max(detection_score, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  filter(is.na(Gene_Symbol) | Gene_Symbol == "") %>%
+  pull(Accession) %>%
+  unique() %>%
+  na.omit()
 
-uniprot_results <- accessions_to_query %>% # chop into lists of ~100 IDs
-  split(ceiling(seq_along(.) / 100)) %>% # call the API on each batch, row-bind results
-  map_dfr(query_uniprot) %>% 
-  distinct(Accession, .keep_all = TRUE) # drop any duplicate accessions
+# Break the list into chunks of 100 accessions, query UniProt for each chunk,
+# then row-bind all results and remove duplicate accessions
+uniprot_results <- accessions_to_query %>%
+  split(ceiling(seq_along(.) / 100)) %>%
+  map_dfr(query_uniprot) %>%
+  distinct(Accession, .keep_all = TRUE)
 ```
 
 *Step-by-Step Breakdown*
 
-1. `group_by(Accession, Gene_Symbol)`
-- group rows so we can pick the single best entry per accession/symbol pair
+1. `query_uniprot <- function(accessions) { … }`
 
-2. `slice_max(detection_score, n = 1, with_ties = FALSE)`
-- within each group, keep the row with the highest detection_score
+Defines a reusable function taking a character vector of UniProt accession IDs.
 
-3. `ungroup()`
-- remove grouping so later steps see the full table
+`q <- paste(accessions, collapse = " OR ")`
 
-4. `filter(is.na(Gene_Symbol) | Gene_Symbol == "")`
-- keep only rows where Gene_Symbol is missing or blank
+Joins IDs into a single search string where each ID is separated by OR, matching the UniProt query syntax.
 
-5. `pull(Accession)`
-- extract the Accession column into a simple vector
+`r <- GET(url, query = list(...))`
 
-6. `unique()`
-- drop duplicate accession IDs
+Uses httr’s GET() to call the UniProt REST endpoint, requesting only accession and gene_primary fields in JSON form, up to 500 records.
 
-7. `na.omit()`
-- remove any NA values from the vector
+`if (status_code(r) == 200) { … } else stop("UniProt query failed")`
 
-Then, to batch and fetch from UniProt:
+Checks for a successful HTTP 200 response; otherwise stops execution with an error.
 
-1. `split(ceiling(seq_along(.) / 100))`
-- `seq_along(.)` generates an index for each ID, dividing by 100 and applying `ceiling()` groups them into batches of ~100; `split()` then turns the vector into a list of those batches
+`j <- httr::content(r, as = "parsed", type = "application/json")`
 
-2. `map_dfr(query_uniprot)`
-- run `query_uniprot()` on each chunk and row-bind the results
+Parses the JSON content into an R list for further processing.
 
-3. `distinct(Accession, .keep_all = TRUE)`
-- drop any duplicate accessions, keeping the first occurrence
+`tibble(Accession = sapply(j$results, …), Gene_Symbol_API = sapply(j$results, …))`
+
+Iterates through j$results, extracting primaryAccession and the first geneName$value (if present) into a two‐column tibble.
+
+7. `accessions_to_query <- sarco %>% group_by(...) %>% slice_max(...) %>% filter(...) %>% pull(...) %>% unique() %>% na.omit()`
+
+  - `group_by(Accession, Gene_Symbol)` then slice_max(detection_score, n = 1) ensures one representative row per accession/symbol.
+
+  - `filter(is.na(Gene_Symbol) | Gene_Symbol == "")` selects only those with missing symbols.
+
+  - `pull(Accession)` extracts the vector of IDs, then unique() and na.omit() clean it.
+
+8. `split(ceiling(seq_along(.) / 100))`
+
+Splits the accession vector into sublists of up to 100 IDs each, to respect potential API size limits.
+
+`map_dfr(query_uniprot)`
+
+Applies query_uniprot() to each sublist and row‐binds (_dfr) all returned tibbles.
+
+`distinct(Accession, .keep_all = TRUE)`
+
+Removes any duplicate rows by accession, retaining the first occurrence of each.
 
 *Key Packages*
 
-- dplyr: for grouping, filtering, and data wrangling.
+httr: Facilitates HTTP requests (here, GET()) and response handling for REST APIs.
 
-- purrr: for batch processing with `map_dfr()`.
+jsonlite: Underlies JSON parsing; though here httr::content() is used directly, jsonlite is a dependency for parsing.
 
-- httr: powers the API calls inside `query_uniprot()`.
+tibble: Creates tidy, modern data frames for the API results.
 
-- tibble: creates clean, well-formatted data frames in `query_uniprot()`.
+purrr: Provides map_dfr() to iterate over list elements and combine results efficiently.
+
+dplyr: Used for data wrangling—grouping, filtering, pulling columns, and chaining operations via the pipe.
 
 ---
 
-## SECTION 3: Merging and Cleaning Gene Symbols Column
+## SECTION 3: Merge and Clean Gene Symbols
 
 *Purpose*
 
-- This chunk merges in any missing gene symbols from the UniProt lookup, fills in blanks in your main `Gene_Symbol` column, strips out any `"isoform_"` prefixes, and then drops the helper column.
+- Join the UniProt‐derived gene symbols back into my main sarco (sarcoplasm) table, uses them to fill any missing or empty original symbols, strip out any "isoform_" prefixes, and then drop the temporary API column.
+
 
 ```{r}
 # ---- 3. Merge and Clean Gene Symbols ----
+# Merge UniProt results and clean up gene symbols
 sarco <- sarco %>%
-  left_join(uniprot_results, by = "Accession") %>% # bring in Gene_Symbol_API
+  # Add Gene_Symbol_API from the UniProt query by matching on Accession
+  left_join(uniprot_results, by = "Accession") %>%
+  # Replace missing/empty Gene_Symbol with the API‐provided value,
+  # then remove any leading "isoform_" text
   mutate(
-    Gene_Symbol = if_else(is.na(Gene_Symbol) | Gene_Symbol == "", Gene_Symbol_API, Gene_Symbol), # fill missing names 
-    Gene_Symbol = str_remove(Gene_Symbol, "^isoform_") # drop any "isoform_" prefix
+    Gene_Symbol = if_else(
+      is.na(Gene_Symbol) | Gene_Symbol == "",
+      Gene_Symbol_API,
+      Gene_Symbol
+    ),
+    Gene_Symbol = str_remove(Gene_Symbol, "^isoform_")
   ) %>%
-  select(-Gene_Symbol_API)  # remove our transient helper column
+  # Drop the now‐redundant API column
+  dplyr::select(-Gene_Symbol_API)
 ```
 
 *Step-by-Step Breakdown*
 
-1. `sarco %>%`
-- start with your cleaned proteomics data frame.
+`left_join(uniprot_results, by = "Accession")`
 
-2. `left_join(uniprot_results, by = "Accession")`
-- merge the UniProt results (which include Gene_Symbol_API) onto sarco by accession ID.
+Performs a left join of sarco with uniprot_results on the Accession column, adding a new column Gene_Symbol_API containing the API query results for each accession.
 
-3. `mutate(Gene_Symbol = if_else(...), Gene_Symbol = str_remove(...))`
-- first, if the original Gene_Symbol is missing or empty, replace it with the UniProt value. Second, remove any "isoform_" prefix from the updated gene symbols.
+`mutate(Gene_Symbol = if_else(...))`
 
-4. `select(-Gene_Symbol_API)`
-- drop the temporary Gene_Symbol_API column now that its values have been merged in.
+Uses dplyr’s if_else() to update Gene_Symbol: if the existing symbol is NA or an empty string, it replaces it with Gene_Symbol_API; otherwise, it leaves the original symbol intact.
 
+`mutate(Gene_Symbol = str_remove(...))`
+
+Applies stringr’s str_remove() with the regex ^isoform_ to strip off any "isoform_" prefix from the updated gene symbols.
+
+`dplyr::select(-Gene_Symbol_API)`
+
+Drops the helper column Gene_Symbol_API, since its values have been merged into Gene_Symbol and are no longer needed.
 
 *Key Packages*
 
-- dplyr: for joining tables, mutating columns, and selecting/dropping fields.
+dplyr: For data manipulation verbs (left_join(), mutate(), select()) and piping.
 
-- stringr: for regex-based string cleanup with `str_remove()`.
+stringr: For regex‐based string cleaning with str_remove().
 
 ---
 
-## SECTION 4: Cleaning, Reshaping, and Long formatting
+## SECTION 4: Remove Duplicates by Detection Score
 
 *Purpose*
 
-- Keep only the best‐measured peptide per accession and per gene, reshape the cleaned table into long form for plotting, add timepoint/group labels, and save both the wide and long versions to CSV.
-
+- De-duplicate the sarco dataset by first retaining the entry with the highest detection score for each unique Accession–Gene combination, and then ensuring that each Gene_Symbol appears only once by keeping its highest‐scoring record.
 
 ```{r}
-# ---- 4. Remove Duplicates and Reshape Data ----
-
-# Remove duplicate peptides, keep best detection per Accession+Gene
+# ---- 4. Remove Duplicates by Detection Score ----
 sarco_clean <- sarco %>%
-  group_by(Accession, Gene_Symbol) %>%                        # group by ID and symbol
-  slice_max(detection_score, n = 1, with_ties = FALSE) %>%   # keep highest score
-  ungroup() %>%                                               # drop grouping
-  group_by(Gene_Symbol) %>%                                   # group by gene only
-  slice_max(detection_score, n = 1, with_ties = FALSE) %>%   # keep highest score
-  ungroup()                                                   # drop grouping
-
-# Reshape to long format for plotting
-long_df <- sarco_clean %>%
-  select(-matches("^T-test_|^DELTA_|^CORREL_|^Young_|^detection_")) %>%  # drop extra stats
-  pivot_longer(                                                         # wide -> long
-    cols       = all_of(sample_cols), 
-    names_to   = "Sample", 
-    values_to  = "Abundance"
-  ) %>%
-  filter(!str_detect(Sample, "_Avg|_StdDev")) %>%                       # remove summary cols
-  mutate(
-    Timepoint = case_when(                                             
-      str_detect(Sample, "PRE")  ~ "Pre",                               # label pre
-      str_detect(Sample, "POST") ~ "Post",                              # label post
-      TRUE                       ~ NA_character_                       
-    ),
-    Group = case_when(
-      str_detect(Sample, "EAA|PPS") ~ "Young",                          # assign Young
-      TRUE                          ~ "MA"                              # assign MA
-    )
-  )
-
-# Save
-write.csv(long_df,    "Clean_Long2.csv", row.names = FALSE)   # long form
-write.csv(sarco_clean, "Clean_Wide2.csv", row.names = FALSE)  # wide form
+  # For each (Accession, Gene_Symbol) pair, keep only the row with the highest detection_score
+  group_by(Accession, Gene_Symbol) %>%
+  slice_max(detection_score, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  # Then, for each Gene_Symbol (across any accessions), keep only the row with the highest detection_score
+  group_by(Gene_Symbol) %>%
+  slice_max(detection_score, n = 1, with_ties = FALSE) %>%
+  ungroup()
 ```
 
 *Step-by-Step Breakdown*
 
-1. `sarco %>% group_by(Accession, Gene_Symbol)`
+`group_by(Accession, Gene_Symbol)`
 
-- Start grouping so you can pick one peptide per (Accession, Gene_Symbol).
+Uses dplyr to create groups defined by each unique combination of Accession and Gene_Symbol.
 
 2. `slice_max(detection_score, n = 1, with_ties = FALSE)`
 
-- Keep the row with the highest detection_score in each group.
+  - Within each group, selects the single row with the maximum detection_score.
 
-3. `ungroup() %>% group_by(Gene_Symbol)`
+  - n = 1 ensures only one row is kept; with_ties = FALSE breaks ties by arbitrarily dropping extras.
 
-- Ungroup then regroup by Gene_Symbol to collapse any remaining duplicates.
+3. `ungroup()`
 
-4. `slice_max(detection_score, n = 1, with_ties = FALSE) %>% ungroup()`
+Removes the current grouping structure so subsequent operations are applied to the whole data frame.
 
-- Again keep the highest‐scoring row per gene, then remove grouping.
+`group_by(Gene_Symbol)`
 
-5. `select(-matches("^T-test_|^DELTA_|^CORREL_|^Young_|^detection_"))`
+Regroups the pruned dataset by Gene_Symbol alone, so that each gene symbol’s entries (potentially from multiple accessions) form a group.
 
-- Drop any leftover statistical or summary columns not needed for plotting.
+`slice_max(detection_score, n = 1, with_ties = FALSE)`
 
-6. `pivot_longer(cols = all_of(sample_cols), names_to = "Sample", values_to = "Abundance")`
+Again, selects the top detection_score row within each Gene_Symbol group, ensuring one representative per gene.
 
-- Turn your measurement columns into two columns: Sample and Abundance.
+`ungroup()`
 
-7. `filter(!str_detect(Sample, "_Avg|_StdDev"))`
-
-- Remove any “_Avg” or “_StdDev” columns that slipped in.
-
-8. `mutate(Timepoint = ..., Group = ...)`
-
-- Create easy‐to‐use Timepoint (“Pre”/“Post”) and Group (“Young”/“MA”) labels.
-
-9. `write_csv(long_df, "Clean_Long2.csv")`
-
-- Save the long‐format table.
-
-10. `write_csv(sarco_clean, "Clean_Wide2.csv")`
-
-- Save the de‐duplicated, wide‐format table.
-
+Finalizes the operation by removing grouping, yielding the cleaned sarco_clean data frame.
 
 *Key Packages*
 
-- dplyr: for grouping, slicing, filtering, and mutating.
-
-- tidyr: for pivoting the data from wide to long format.
-
-- stringr: for pattern‐matching in sample names.
-
-- readr: for writing out clean CSV files with `write_csv()`.
+dplyr: Provides the chaining (%>%), grouping (group_by()), slice-based selection (slice_max()), and ungrouping (ungroup()) verbs used to filter and de-duplicate the data.
 
 ---
 
-## SECTION 6: Functions for Mean Abundance and Plotting Mean Abundance
+## SECTION 5: Convert to Long Format
 
 *Purpose*
 
-- `calculate_pathway_data()`: builds mean‐abundance matrices (raw + normalized to Young) for each sub‐pathway across Young/Pre/Post.` plot_bar()`: takes the raw matrix and draw a faceted bar chart of those mean abundances.
+- Reshape the de-duplicated, wide‐format proteomics data into a long‐format table suitable for downstream analysis, add metadata columns for timepoint and experimental group based on sample names, and then save both the long and wide cleaned datasets.
+
 
 ```{r}
-# ---- 6. Functions for later ----
+# ---- 5. Convert to Long Format ----
 
-calculate_pathway_data <- function(category, data) { # 'groups' must be defined elsewhere, e.g. c("Young","Pre","Post")
-  abundance_matrix <- sapply(groups, function(group) {
-    subset_data <- data %>%
-      filter(   (group == "Young" & Group == "Young") |
-                (group == "Pre"   & Group == "MA"    & Timepoint == "Pre") |
-                (group == "Post"  & Group == "MA"    & Timepoint == "Post")
-      ) # filter to the right comparison for each group
-    # compute mean abundance of each gene list
-    sapply(category, function(genes) 
-      mean(subset_data$Abundance[subset_data$Gene_Symbol %in% genes], na.rm = TRUE)
+long_df <- sarco_clean %>%
+  # Drop any leftover statistical summary or helper columns
+  dplyr::select(-matches("^T-test_|^DELTA_|^CORREL_|^Young_|^detection_")) %>%
+  # Pivot the sample measurement columns into two columns: Sample (name) and Abundance (value)
+  pivot_longer(
+    cols       = all_of(sample_cols),
+    names_to   = "Sample",
+    values_to  = "Abundance"
+  ) %>%
+  # Exclude any rows where Sample refers to averages or standard deviations
+  filter(!str_detect(Sample, "_Avg|_StdDev")) %>%
+  # Derive new metadata columns from the Sample names
+  mutate(
+    Timepoint = case_when(
+      str_detect(Sample, "PRE")  ~ "Pre",   # Samples containing "PRE"
+      str_detect(Sample, "POST") ~ "Post",  # Samples containing "POST"
+      TRUE                       ~ NA_character_
+    ),
+    Group = case_when(
+      str_detect(Sample, "EAA|PPS") ~ "Young",  # Young group prefixes
+      TRUE                          ~ "MA"      # Otherwise, Middle‐Aged
     )
-  })
-  list( normalized = abundance_matrix / abundance_matrix[, "Young"],  # scale columns so Young = 1
-        raw = abundance_matrix                                 # raw mean values
   )
-}
 
-plot_bar <- function(data, pathway_name) { # reshape raw matrix into long format for ggplot
-  bar_data <- as.data.frame(t(data$raw)) %>%
-    tibble::rownames_to_column("Group") %>% # bring module names into 'Group'
-    tidyr::pivot_longer(-Group, names_to = "Module", values_to = "Abundance") %>%
-    dplyr::mutate(Group = factor(Group, levels = group_order)) # ensure plotting order
-
-  # drawing faceted bar chart: one panel per Module, bars colored by Group
-  ggplot2::ggplot(bar_data, aes(x = Group, y = Abundance, fill = Group)) +
-    ggplot2::geom_col(position = "dodge", color = "black") +
-    ggplot2::facet_wrap(~ Module, scales = "free_y", ncol = 2) +
-    ggplot2::scale_fill_manual(values = colors) +
-    ggplot2::labs(
-      title = paste(pathway_name, "Pathway Abundance"),
-      x     = "Group",
-      y     = "Mean Abundance",
-      fill  = "Group"
-    ) +
-    ggplot2::theme_minimal(base_size = 14) +
-    ggplot2::theme(
-      strip.text  = element_text(face = "bold"),
-      axis.text.x = element_text(angle = 45, hjust = 1),
-      plot.title  = element_text(face = "bold")
-    )
-}
-
+# Save the reshaped long and the cleaned wide datasets
+write.csv(long_df,    "Clean_Long2.csv", row.names = FALSE)
+write.csv(sarco_clean, "Clean_Wide2.csv", row.names = FALSE)
 ```
 
 *Step-by-Step Breakdown*
 
-1. `calculate_pathway_data <- function(category, data) { … }`  
+`dplyr::select(-matches("^T-test_|^DELTA_|^CORREL_|^Young_|^detection_"))`
 
-- Defines a helper that takes a list of gene‐sets (`category`) and your long‐format data, and returns both raw and normalized abundance matrices.
+Removes any columns whose names begin with summary prefixes (e.g. “T-test_”, “DELTA_”) or the original detection score, keeping only raw sample measurements and annotation fields.
 
-2. `sapply(groups, function(group) { … })`  
+`pivot_longer(cols = all_of(sample_cols), names_to = "Sample", values_to = "Abundance")`
 
-- Loops over each comparison group (`groups` = Young, Pre, Post) to build one column per group.
+Uses tidyr to transform the wide set of sample columns into a long format, creating one row per sample measurement with the column name in Sample and its value in Abundance.
 
-3. `data %>% filter((group == "Young" & Group == "Young") | … )`  
+`filter(!str_detect(Sample, "_Avg|_StdDev"))`
 
-- Filters the input data to rows matching the current group and its timepoint.
+Excludes rows where the Sample name indicates an average or standard deviation column (e.g., “_Avg” or “_StdDev”) via stringr’s str_detect().
 
-4. `sapply(category, function(genes) mean(..., na.rm = TRUE))`  
+4. `mutate(Timepoint = case_when(...), Group = case_when(...))`
 
-- For each sub-pathway (vector of genes), computes the mean `Abundance`, ignoring missing values.
+  - Adds a Timepoint column labeling each row as “Pre” or “Post” based on whether Sample contains “PRE” or “POST”.
 
-5. `abundance_matrix / abundance_matrix[, "Young"]`  
+  - Adds a Group column labeling samples as “Young” if the name contains “EAA” or “PPS”, otherwise “MA” for middle‐aged.
 
-- Normalizes each column by the “Young” column so that Young = 1.
+5. `write.csv()`
 
-6. `list(normalized = ..., raw = ...)`  
-
-- Packages up the normalized and raw mean‐abundance matrices into a named list.
-
-7. `plot_bar <- function(data, pathway_name) { … }`  
-
-- Defines a function that takes the raw abundance matrix and a pathway name, then draws a faceted bar chart.
-
-8. `as.data.frame(t(data$raw))`  
-
-- Transposes the raw matrix so that rows become groups and columns become modules, then coerces to a data frame.
-
-9. `rownames_to_column("Group")`  
-
-- Converts the row names (group labels) into an explicit column named `Group`.
-
-10. `pivot_longer(-Group, names_to = "Module", values_to = "Abundance")`  
-
-- Melts the wide data frame into long form with one row per Group–Module combination.
-
-11. `mutate(Group = factor(Group, levels = group_order))`  
-
-- Ensures that the `Group` factor follows the desired plotting order (e.g. Young → Pre → Post).
-
-12. `ggplot(bar_data, aes(x = Group, y = Abundance, fill = Group))`  
-
-- Initializes the ggplot with Group on the x-axis, Abundance on the y-axis, and fill mapped to Group.
-
-13. `geom_col(position = "dodge", color = "black")`  
-
-- Draws side-by-side bars for each group, with black outlines.
-
-14. `facet_wrap(~ Module, scales = "free_y", ncol = 2)`  
-
-- Creates one panel per module, allowing each panel its own y-axis scale, arranged in two columns.
-
-15. `scale_fill_manual(values = colors)`  
-  
-- Applies your custom color palette to the group fills.
-
-16. `labs(title = paste(pathway_name, "Pathway Abundance"), x = "Group", y = "Mean Abundance", fill = "Group")`  
-
-- Sets an intuitive title and axis/legend labels.
-
-17. `theme_minimal(base_size = 14)`  
-
-- Applies a clean, minimal theme with base font size 14.
-
-18. `theme(strip.text = element_text(face = "bold"), axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(face = "bold"))`  
-  
-- Fine-tunes text styling: bold facet labels, angled x-axis labels, and bold plot title.
+Exports long_df and the cleaned wide data frame sarco_clean to CSV files for future use.
 
 *Key Packages*
 
-- dplyr: filtering, piping, mutate.
+dplyr: Chaining operations (%>%), selecting/deselecting columns, filtering rows, and creating new columns (mutate).
 
-- tidyr: pivot_longer for reshaping.
+tidyr: Reshaping data with pivot_longer().
 
-- tibble: rownames_to_column helper.
+stringr: String pattern matching with str_detect() to identify and exclude unwanted rows and to derive metadata.
 
-- ggplot2: faceted bar charts.
+utils (base R): write.csv() for writing data frames to CSV files.
 
 ---
 
-## SECTION 7: Significance Calculations
+## SECTION 6: Summary Table of Mean Abundances
 
 *Purpose*
 
-- Defines a single function that runs three pairwise t-tests (Pre vs Post in MA, Young vs Pre, Young vs Post), corrects all p-values for false discovery (Benjamini–Hochberg), and returns a tidy table of raw and adjusted p’s for every sub-pathway module. Then applies it to each of the six major pathways.
+- Compute the average protein abundance for each gene across the defined experimental groups (“Young”, “Pre_MA”, “Post_MA”), reshape the results into a wide summary table, and save it as a CSV for later (could use for something else).
 
 ```{r}
-# ---- 7. Calculate Significance Values ----
-calculate_significance <- function(categories, data) {
-  purrr::imap_dfr(categories, function(genes, module) {
-    df <- dplyr::filter(data, Gene_Symbol %in% genes)
-  # 1. Pre vs Post within MA
-    df_pp <- dplyr::filter(df, Group == "MA", Timepoint %in% c("Pre","Post"))
-    p_pp <- if (length(unique(df_pp$Timepoint))==2) {
-      t.test(Abundance ~ Timepoint, df_pp)$p.value
-    } else NA_real_
-  # 2. Young vs Pre
-    df_yp <- dplyr::filter(df, Group == "Young" | (Group=="MA" & Timepoint=="Pre"))
-    p_yp <- if (length(unique(df_yp$Group))==2) {
-      t.test(Abundance ~ Group, df_yp)$p.value
-    } else NA_real_
-  # 3. Young vs Post
-    df_ypo <- dplyr::filter(df, Group == "Young" | (Group=="MA" & Timepoint=="Post"))
-    p_ypo <- if (length(unique(df_ypo$Group))==2) {
-      t.test(Abundance ~ Group, df_ypo)$p.value
-    } else NA_real_
-    
-    tibble::tibble(
-      Pathway_Module   = module,
-      p_Pre_vs_Post    = p_pp,
-      p_Young_vs_Pre   = p_yp,
-      p_Young_vs_Post  = p_ypo
+# ---- 6. Summary Table: Mean Abundances ----
+
+mean_abundance_summary <- long_df %>%
+  # Define a new grouping variable based on Timepoint and Group
+  mutate(
+    Grouping = case_when(
+      Group == "Young"                ~ "Young",    # Young subjects
+      Group == "MA" & Timepoint == "Pre"  ~ "Pre_MA",   # Middle-aged Pre-training
+      Group == "MA" & Timepoint == "Post" ~ "Post_MA",  # Middle-aged Post-training
+      TRUE                            ~ NA_character_
+    )
+  ) %>%
+  # Exclude any rows where we couldn't assign a valid grouping
+  filter(!is.na(Grouping)) %>%
+  # Calculate the mean abundance for each gene in each grouping
+  group_by(Gene_Symbol, Grouping) %>%
+  summarise(
+    Mean_Abundance = mean(Abundance, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  # Pivot the summary so each grouping becomes its own column
+  pivot_wider(
+    names_from = Grouping,
+    values_from = Mean_Abundance
+  )
+
+# Write the summary table to disk
+write.csv(
+  mean_abundance_summary,
+  "Group_Abundance.csv",
+  row.names = FALSE
+)
+```
+
+*Step-by-Step Breakdown*
+
+1. `mutate(Grouping = case_when(...))`
+Creates a new Grouping column:
+
+  - `“Young”` for samples labeled as young subjects.
+
+  - `“Pre_MA”` for middle-aged pre-training samples.
+
+  - `“Post_MA”` for middle-aged post-training samples.
+
+  - NA otherwise.
+
+`filter(!is.na(Grouping))`
+Drops any rows where Grouping is NA, ensuring only valid groups remain.
+
+`group_by(Gene_Symbol, Grouping)`
+Organizes the data into groups defined by gene symbol and the new grouping variable.
+
+`summarise(Mean_Abundance = mean(Abundance, na.rm = TRUE), .groups = "drop")`
+Calculates the average Abundance within each gene–group pair, removing grouping afterwards (.groups = "drop").
+
+`pivot_wider(names_from = Grouping, values_from = Mean_Abundance)`
+Converts the long summary into a wide format, with one column per grouping (e.g., Young, Pre_MA, Post_MA).
+
+`write.csv(mean_abundance_summary, "Group_Abundance.csv", row.names = FALSE)`
+Exports the resulting summary table to a CSV file without row names.
+
+*Key Packages*
+
+dplyr: For data transformation verbs (mutate(), filter(), group_by(), summarise()) and piping.
+
+tidyr: For reshaping data with pivot_wider().
+
+utils (base R): Provides write.csv() to export data frames to CSV files.
+
+---
+
+## SECTION 7: Compute log2FC and Per-Gene Stats
+
+*Purpose*
+
+- Calculate log2 fold-changes between experimental groups for each protein and then perform statistical tests (t-tests) comparing Pre_MA vs Young, Post_MA vs Young, and Post_MA vs Pre_MA. Then, adjust p-values for multiple testing and merges fold-change and statistics into one table.
+
+```{r}
+# ---- 7. Compute log2FC and Per-Gene Stats ----
+
+    # 1. Calculate log2 fold-change from mean abundances
+fc_df <- mean_abundance_summary %>%
+  mutate(
+    log2FC_Pre_vs_Young    = log2(Pre_MA   / Young),  # Pre-training MA vs Young
+    log2FC_Post_vs_Young   = log2(Post_MA  / Young),  # Post-training MA vs Young
+    log2FC_Post_vs_Pre_MA  = log2(Post_MA  / Pre_MA)  # Post vs Pre within MA
+  )
+
+    # 2. For each gene, run three t-tests and collect p-values
+stat_df <- long_df %>%
+  group_by(Gene_Symbol) %>%             # operate within each gene
+  do({
+    df <- .                             # capture the per-gene subset
+
+      # Pre_MA vs Young comparison
+    df1 <- df %>% 
+      filter((Group == "MA" & Timepoint == "Pre") | Group == "Young")
+    p1  <- if (n_distinct(df1$Group) == 2) 
+             t.test(Abundance ~ Group, data = df1)$p.value 
+           else NA_real_
+
+      # Post_MA vs Young comparison
+    df2 <- df %>% 
+      filter((Group == "MA" & Timepoint == "Post") | Group == "Young")
+    p2  <- if (n_distinct(df2$Group) == 2) 
+             t.test(Abundance ~ Group, data = df2)$p.value 
+           else NA_real_
+
+      # Post_MA vs Pre_MA within MA
+    df3 <- df %>% 
+      filter(Group == "MA", Timepoint %in% c("Pre", "Post"))
+    p3  <- if (n_distinct(df3$Timepoint) == 2) 
+             t.test(Abundance ~ Timepoint, data = df3)$p.value 
+           else NA_real_
+
+      # Return a one-row tibble of p-values
+    tibble(
+      p_Pre_vs_Young    = p1,
+      p_Post_vs_Young   = p2,
+      p_Post_vs_Pre_MA  = p3
     )
   }) %>%
-  # Benjamini–Hochberg FDR correction column of p-values
-  dplyr::mutate(dplyr::across(dplyr::starts_with("p_"),
-                              ~ p.adjust(., method = "BH"),
-                              .names = "{.col}_adj"))
-}
-# Apply to each major pathway
-signif_oxidative  <- calculate_significance(categories$Oxidative_Damage,          long_df)
-signif_antiox     <- calculate_significance(categories$Antioxidant_Response,       long_df)
-signif_er_up       <- calculate_significance(categories$ER_Stress_and_UPR,          long_df)
-signif_protsyn    <- calculate_significance(categories$Protein_Synthesis,         long_df)
-signif_proteolysis<- calculate_significance(categories$Proteolysis,              long_df)
-signif_mitoqc     <- calculate_significance(categories$Mitochondrial_Quality_Control, long_df)
+  ungroup() %>%                        # remove grouping
+  mutate(
+    # 3. Adjust all three sets of p-values using the FDR method
+    adj_Pre_vs_Young    = p.adjust(p_Pre_vs_Young,    method = "fdr"),
+    adj_Post_vs_Young   = p.adjust(p_Post_vs_Young,   method = "fdr"),
+    adj_Post_vs_Pre_MA  = p.adjust(p_Post_vs_Pre_MA,  method = "fdr")
+  )
 
+    # 4. Merge fold-change and statistics into a single data frame
+gene_stats <- fc_df %>%
+  left_join(stat_df, by = "Gene_Symbol")
 ```
 
 *Step-by-Step Breakdown*
 
-1. `calculate_significance <- function(categories, data) { … }`  
+`mutate(log2FC_... = log2(...))`
 
-- Defines a function that takes your list of gene‐sets and the long‐format data, then returns a table of raw and adjusted p-values for each sub-pathway.
+Computes the log₂ fold-change for each comparison by taking the ratio of mean abundances.
 
-2. `purrr::imap_dfr(categories, function(genes, module) { … })`  
+`group_by(Gene_Symbol)`
 
-- Iterates over each element of `categories`, with `genes` = gene vector and `module` = its name, then row-binds the results.
+Splits the long-format data into subsets, one per gene.
 
-3. `df <- data %>% filter(Gene_Symbol %in% genes)`  
+3. `do({ … })`
 
-- Subsets the data to only those rows corresponding to the current module’s genes.
+  - Executes custom code for each gene subset:
 
-4. `df_pp <- df %>% filter(Group == "MA", Timepoint %in% c("Pre","Post"))`  
+  - `filter()` selects the two groups to compare for each test.
 
-- Further filters to middle-aged (MA) Pre vs Post samples.
+  - `n_distinct(...)=2` checks that both groups are present.
 
-5. `p_pp <- if (length(unique(df_pp$Timepoint)) == 2) t.test(Abundance ~ Timepoint, df_pp)$p.value else NA_real_`  
+  - `t.test(Abundance ~ Group or Timepoint)` performs the t-test.
 
-- Runs a Pre vs Post t-test if both timepoints exist; otherwise sets `NA`.
+  - Results are packed into a one-row tibble of p-values.
 
-6. `df_yp <- df %>% filter(Group == "Young" | (Group == "MA" & Timepoint == "Pre"))`  
+4. `p.adjust(..., method = "fdr")`
 
-- Subsets to Young vs MA-Pre samples.
+Applies the Benjamini–Hochberg procedure to control the false discovery rate across all genes for each comparison.
 
-7. `p_yp <- if (length(unique(df_yp$Group)) == 2) t.test(Abundance ~ Group, df_yp)$p.value else NA_real_`  
+`left_join(stat_df, by = "Gene_Symbol")`
 
-- Runs a Young vs Pre t-test if both groups exist.
-
-8. `df_ypo <- df %>% filter(Group == "Young" | (Group == "MA" & Timepoint == "Post"))`  
-
-- Subsets to Young vs MA-Post samples.
-
-9. `p_ypo <- if (length(unique(df_ypo$Group)) == 2) t.test(Abundance ~ Group, df_ypo)$p.value else NA_real_`  
-
-- Runs a Young vs Post t-test if both groups exist.
-
-10. `tibble::tibble(Pathway_Module = module, p_Pre_vs_Post = p_pp, p_Young_vs_Pre = p_yp, p_Young_vs_Post = p_ypo)`  
-
-- Creates a one-row tibble containing the module name and the three raw p-values.
-
-11. `dplyr::mutate(dplyr::across(dplyr::starts_with("p_"), ~ p.adjust(., method = "BH"), .names = "{.col}_adj"))`  
-
-- Adjusts each raw p-value column using the Benjamini–Hochberg FDR method, appending `_adj`.
-
-12. `signif_ ...  <- calculate_significance(categories$ ...,          long_df)`
-
-- Applies the function to each of the six major pathway lists, storing results in separate objects.
-
+Combines the fold-change data (fc_df) with the statistics (stat_df) into gene_stats.
 
 *Key Packages*
 
-- purrr: for `imap_dfr()` iteration and binding results.
+dplyr: For data manipulation verbs (mutate(), group_by(), filter(), ungroup(), left_join()), piping, and slice_max().
 
-- dplyr: for filtering, mutating, and p-value adjustment.
+stats (base R): Provides t.test() for performing two-sample t-tests and p.adjust() for multiple testing correction.
 
-- tibble: for creating tidy result tibbles.
+tibble: Creates the one-row tibbles of p-values in the do() call.
 
-- stats: for `t.test()`.
+stringr: (Indirectly) if any string operations are used elsewhere; not directly called in this section but part of previous cleaning steps.
 
 ---
 
-## SECTION 8: Bar Plot and P-value table
+## SECTION 8: Pathway Enrichment Analysis (Aging in Muscle)
 
 *Purpose*
 
-- # Loop over each major pathway to draw its bar plot and print the module (pathway/categoy)‐level p‐values.
+- Convert gene symbols to Entrez IDs and then conduct pathway enrichment analyses (KEGG, Reactome, and GO Biological Process) for the “Pre_MA vs Young” comparison to identify biological pathways associated with aging in muscle.
 
 ```{r}
- ---- 8. Generate Bar Plots & Print Significance ----
+# ---- 8. Pathway Enrichment Analysis (Aging in Muscle) ----
 
-# List of pathway data objects
-pathway_data <- list(
-  "Oxidative Damage & Redox"    = calculate_pathway_data(categories$Oxidative_Damage,    long_df),
-  "Antioxidant Response"         = calculate_pathway_data(categories$Antioxidant_Response,  long_df),
-  "ER Stress & UPR Outcome"      = calculate_pathway_data(categories$ER_Stress_UPR,       long_df),
-  "Translational Control (mTOR)" = calculate_pathway_data(categories$Protein_Synthesis,    long_df),
-  "Proteostasis & Clearance"     = calculate_pathway_data(categories$Proteostasis,       long_df),
-  "Mitochondrial Quality Ctrl"   = calculate_pathway_data(categories$Mitochondrial_Homeostasis, long_df)
+# 1. Map gene symbols to Entrez IDs using the org.Hs.eg.db annotation database
+entrez_map <- bitr(
+  gene_stats$Gene_Symbol,      # Input vector of gene symbols
+  fromType = "SYMBOL",         # Convert from SYMBOL
+  toType   = "ENTREZID",       # Convert to ENTREZID
+  OrgDb    = org.Hs.eg.db      # Human annotation package
 )
 
-# Corresponding significance tables
-sig_tables <- list(
-  "Oxidative Damage & Redox"    = signif_oxidative,
-  "Antioxidant Response"         = signif_antiox,
-  "ER Stress & UPR Outcome"      = signif_er_up,
-  "Translational Control (mTOR)" = signif_protsyn,
-  "Proteostasis & Clearance"     = signif_proteolysis,
-  "Mitochondrial Quality Ctrl"   = signif_mitoqc
+# 2. Prepare a named numeric vector of log2 fold-changes for enrichment
+gene_list_Pre_vs_Young <- gene_stats %>%
+  inner_join(entrez_map, by = c("Gene_Symbol" = "SYMBOL")) %>%  # Keep only genes with Entrez IDs
+  arrange(desc(log2FC_Pre_vs_Young)) %>%                        # Sort descending by effect size
+  { set_names(.$log2FC_Pre_vs_Young, .$ENTREZID) }              # Create named vector: names = ENTREZID, values = log2FC
+
+# 3. Run KEGG pathway enrichment for aging (Pre_MA vs Young)
+kegg_Pre_vs_Young <- enrichKEGG(
+  gene         = names(gene_list_Pre_vs_Young),   # Vector of Entrez IDs
+  organism     = "hsa",                            # Human KEGG code
+  pvalueCutoff = 0.10                              # Include terms with p ≤ 0.10
 )
 
-# Loop pathway, plot bar chart, then print p-values
-purrr::walk(names(pathway_data), function(name) {
-  plt <- plot_bar(pathway_data[[name]], name)   # draw the bar plot
-  print(plt)                                    # display it
-  cat("\nModule‐level p‐values for", name, ":\n") 
-  print(sig_tables[[name]])                     # show the stats table
-})
+# 4. Run Reactome pathway enrichment
+reactome_Pre_vs_Young <- enrichPathway(
+  gene         = names(gene_list_Pre_vs_Young),   # Same Entrez IDs
+  organism     = "human",                          # Reactome expects "human"
+  pvalueCutoff = 0.10
+)
 
+# 5. Run Gene Ontology (Biological Process) enrichment
+go_Pre_vs_Young <- enrichGO(
+  gene         = names(gene_list_Pre_vs_Young),   # Entrez IDs
+  OrgDb        = org.Hs.eg.db,                     # Annotation database
+  ont          = "BP",                             # Ontology: Biological Process
+  pvalueCutoff = 0.10
+)
+
+# 6. Collect all results into a single list for easy access
+enrichment_results <- list(
+  KEGG_Pre_vs_Young     = kegg_Pre_vs_Young,
+  Reactome_Pre_vs_Young = reactome_Pre_vs_Young,
+  GO_Pre_vs_Young       = go_Pre_vs_Young
+)
 ```
 
 *Step-by-Step Breakdown*
 
-1. `pathway_data <- list(...)`  
+`bitr(..., OrgDb = org.Hs.eg.db)`
 
-- Build a named list where each entry holds the mean‐abundance matrices (raw + normalized) for one major pathway by calling `calculate_pathway_data()` on your categories.
+Uses clusterProfiler’s bitr() to map human gene symbols (SYMBOL) to Entrez IDs (ENTREZID) via the org.Hs.eg.db Bioconductor annotation package.
 
-2. `sig_tables <- list(...)`  
+`inner_join(entrez_map, by = c("Gene_Symbol" = "SYMBOL"))`
 
-- Create a matching named list of significance tables (`data.frame`s of p-values) for each pathway.
+Joins gene_stats with entrez_map to retain only genes that successfully mapped to an Entrez ID.
 
-3. `purrr::walk(names(pathway_data), function(name) { … })`  
+`arrange(desc(log2FC_Pre_vs_Young))`
 
-- Loop over each pathway name, running the anonymous function on every element of `pathway_data`.
+Orders the joined data frame by descending log₂ fold-change, so the most upregulated aging-associated genes come first.
 
-4. `plt <- plot_bar(pathway_data[[name]], name)`  
+`{ set_names(.$log2FC_Pre_vs_Young, .$ENTREZID) }`
 
-- Inside the loop: generate the faceted bar chart for the current pathway’s raw abundance matrix.
+Constructs a named numeric vector where each element is the log₂ fold-change and its name is the corresponding Entrez ID, as required by enrichment functions like enrichKEGG().
 
-5. `print(plt)`  
+`enrichKEGG(gene = ..., organism = "hsa", pvalueCutoff = 0.10)`
 
-- Display the bar chart in the R plotting window.
+Runs KEGG pathway enrichment using clusterProfiler, specifying human (“hsa”) and including pathways with p-values ≤ 0.10.
 
-6. `cat("\nModule-level p-values for", name, ":\n")`  
+`enrichPathway(..., organism = "human")`
 
-- Print a header announcing which pathway’s module p-values are coming next.
+Performs Reactome enrichment via ReactomePA’s enrichPathway(), again with a 0.10 p-value threshold.
 
-7. `print(sig_tables[[name]])`  
+`enrichGO(..., ont = "BP")`
 
-- Print the data frame of module-level significance results for that pathway. 
+Executes Gene Ontology Biological Process enrichment using clusterProfiler’s enrichGO(), referencing the org.Hs.eg.db database.
+
+`list(...)`
+
+Aggregates the three enrichment result objects into a named list (enrichment_results) for downstream plotting or inspection.
 
 *Key Packages*
 
-- purrr: for `walk()`, to loop without returning a value.
+clusterProfiler: Provides functions for enrichment analyses, including bitr(), enrichKEGG(), and enrichGO().
 
-- ggplot2: for plotting inside `plot_bar()`.
+ReactomePA: Supplies enrichPathway() for Reactome database enrichment.
 
-- dplyr, tidyr, tibble: used earlier to shape data passed into these functions.
+org.Hs.eg.db: Bioconductor annotation package mapping human gene symbols to Entrez IDs.
+
+dplyr: Used for data manipulation (inner_join(), arrange() and pipelining).
+
+magrittr: For the pipe (%>%) and the compound expression ({}) to set names on the vector.
+
+---
+
+## SECTION 8: Pathway Enrichment Analysis (Aging in Muscle)
+
+*Purpose*
+
+- Convert gene symbols to Entrez IDs and then conduct pathway enrichment analyses (KEGG, Reactome, and GO Biological Process) for the “Pre_MA vs Young” comparison to identify biological pathways associated with aging in muscle.
+
+```{r}
+# ---- 8. Pathway Enrichment Analysis (Aging in Muscle) ----
+
+# 1. Map gene symbols to Entrez IDs using the org.Hs.eg.db annotation database
+entrez_map <- bitr(
+  gene_stats$Gene_Symbol,      # Input vector of gene symbols
+  fromType = "SYMBOL",         # Convert from SYMBOL
+  toType   = "ENTREZID",       # Convert to ENTREZID
+  OrgDb    = org.Hs.eg.db      # Human annotation package
+)
+
+# 2. Prepare a named numeric vector of log2 fold-changes for enrichment
+gene_list_Pre_vs_Young <- gene_stats %>%
+  inner_join(entrez_map, by = c("Gene_Symbol" = "SYMBOL")) %>%  # Keep only genes with Entrez IDs
+  arrange(desc(log2FC_Pre_vs_Young)) %>%                        # Sort descending by effect size
+  { set_names(.$log2FC_Pre_vs_Young, .$ENTREZID) }              # Create named vector: names = ENTREZID, values = log2FC
+
+# 3. Run KEGG pathway enrichment for aging (Pre_MA vs Young)
+kegg_Pre_vs_Young <- enrichKEGG(
+  gene         = names(gene_list_Pre_vs_Young),   # Vector of Entrez IDs
+  organism     = "hsa",                            # Human KEGG code
+  pvalueCutoff = 0.10                              # Include terms with p ≤ 0.10
+)
+
+# 4. Run Reactome pathway enrichment
+reactome_Pre_vs_Young <- enrichPathway(
+  gene         = names(gene_list_Pre_vs_Young),   # Same Entrez IDs
+  organism     = "human",                          # Reactome expects "human"
+  pvalueCutoff = 0.10
+)
+
+# 5. Run Gene Ontology (Biological Process) enrichment
+go_Pre_vs_Young <- enrichGO(
+  gene         = names(gene_list_Pre_vs_Young),   # Entrez IDs
+  OrgDb        = org.Hs.eg.db,                     # Annotation database
+  ont          = "BP",                             # Ontology: Biological Process
+  pvalueCutoff = 0.10
+)
+
+# 6. Collect all results into a single list for easy access
+enrichment_results <- list(
+  KEGG_Pre_vs_Young     = kegg_Pre_vs_Young,
+  Reactome_Pre_vs_Young = reactome_Pre_vs_Young,
+  GO_Pre_vs_Young       = go_Pre_vs_Young
+)
+```
+
+*Step-by-Step Breakdown*
+
+`bitr(..., OrgDb = org.Hs.eg.db)`
+
+Uses clusterProfiler’s bitr() to map human gene symbols (SYMBOL) to Entrez IDs (ENTREZID) via the org.Hs.eg.db Bioconductor annotation package.
+
+`inner_join(entrez_map, by = c("Gene_Symbol" = "SYMBOL"))`
+
+Joins gene_stats with entrez_map to retain only genes that successfully mapped to an Entrez ID.
+
+`arrange(desc(log2FC_Pre_vs_Young))`
+
+Orders the joined data frame by descending log₂ fold-change, so the most upregulated aging-associated genes come first.
+
+`{ set_names(.$log2FC_Pre_vs_Young, .$ENTREZID) }`
+
+Constructs a named numeric vector where each element is the log₂ fold-change and its name is the corresponding Entrez ID, as required by enrichment functions like enrichKEGG().
+
+`enrichKEGG(gene = ..., organism = "hsa", pvalueCutoff = 0.10)`
+
+Runs KEGG pathway enrichment using clusterProfiler, specifying human (“hsa”) and including pathways with p-values ≤ 0.10.
+
+`enrichPathway(..., organism = "human")`
+
+Performs Reactome enrichment via ReactomePA’s enrichPathway(), again with a 0.10 p-value threshold.
+
+`enrichGO(..., ont = "BP")`
+
+Executes Gene Ontology Biological Process enrichment using clusterProfiler’s enrichGO(), referencing the org.Hs.eg.db database.
+
+`list(...)`
+
+Aggregates the three enrichment result objects into a named list (enrichment_results) for downstream plotting or inspection.
+
+*Key Packages*
+
+clusterProfiler: Provides functions for enrichment analyses, including bitr(), enrichKEGG(), and enrichGO().
+
+ReactomePA: Supplies enrichPathway() for Reactome database enrichment.
+
+org.Hs.eg.db: Bioconductor annotation package mapping human gene symbols to Entrez IDs.
+
+dplyr: Used for data manipulation (inner_join(), arrange() and pipelining).
+
+magrittr: For the pipe (%>%) and the compound expression ({}) to set names on the vector.
+
+---
+
+## SECTION 9: Visualize Enrichment Results (Aging in Muscle)
+
+*Purpose*
+
+- Generate and display dot plots of the top 15 enriched pathways from the KEGG, Reactome, and GO analyses for the Pre_MA vs Young comparison, labeling each plot with a clear title.
+
+```{r}
+# ---- 9. Visualize Enrichment Results (Aging in Muscle) ----
+
+# Plot KEGG enrichment results, showing the top 15 pathways
+print(
+  dotplot(
+    kegg_Pre_vs_Young,
+    showCategory = 15       # Number of categories (pathways) to display
+  ) +
+  ggtitle("KEGG: Pre_MA vs Young (AGING)")  # Add a descriptive title
+)
+
+# Plot Reactome enrichment results
+print(
+  dotplot(
+    reactome_Pre_vs_Young,
+    showCategory = 15
+  ) +
+  ggtitle("Reactome: Pre_MA vs Young (AGING)")
+)
+
+# Plot GO Biological Process enrichment results
+print(
+  dotplot(
+    go_Pre_vs_Young,
+    showCategory = 15
+  ) +
+  ggtitle("GO: Pre_MA vs Young (AGING)")
+)
+```
+
+*Step-by-Step Breakdown*
+
+`dotplot(kegg_Pre_vs_Young, showCategory = 15)`
+
+Uses enrichplot’s dotplot() to create a bubble/dot plot for the KEGG enrichment object, displaying the top 15 enriched pathways by default sorted by gene ratio or p-value.
+
+`+ ggtitle("KEGG: Pre_MA vs Young (AGING)")`
+
+Adds a title to the ggplot object via ggplot2’s ggtitle(), clarifying the comparison and context.
+
+3. `print(...)`
+
+Ensures the plot is rendered in non-interactive R sessions or scripts; explicitly prints the combined plot object to the current graphics device.
+
+4. Repeat for `reactome_Pre_vs_Young` and `go_Pre_vs_Young`
+
+Generates analogous plots for Reactome and GO Biological Process results, each showing the top 15 terms and bearing its own title.
+
+*Key Packages*
+
+enrichplot: Provides the dotplot() function tailored for enrichment result objects from clusterProfiler and ReactomePA.
+
+ggplot2: Underpins the plotting system, used here for adding titles (ggtitle()) and handling plot objects.
+
+grid (implicitly via base R): Manages the display of multiple plots when using print().
+
+---
+
+## SECTION 10: Facetted “Zoom-In” Pathway Plots (p ≤ 0.10 only)
+
+*Purpose*
+
+- Define concise sets of biologically relevant pathways for KEGG, Reactome, and GO so that subsequent plots can focus (“zoom in”) on these specific targets, filtered by p ≤ 0.10.
+
+```{r}
+# ---- 10. Facetted “Zoom-In” Pathway Plots (p ≤ 0.10 only) ----
+
+# Define pathway targets for aging and training
+kegg_targets <- c(
+  Glutathione   = "Glutathione metabolism",
+  Proteasome    = "Proteasome",
+  ER_Processing = "Protein processing in endoplasmic reticulum",
+  Ubiquitin     = "Ubiquitin mediated proteolysis"
+)
+
+reactome_targets <- c(
+  DetoxROS       = "Detoxification of Reactive Oxygen Species",
+  ERAD           = "ER-Associated Degradation (ERAD)",
+  Folding        = "Protein folding",
+  Macroautophagy = "Macroautophagy"
+)
+
+go_targets <- c(
+  OxidativeStress = "response to oxidative stress",
+  ProteinFolding  = "protein folding",
+  Proteolysis     = "proteasome-mediated ubiquitin-dependent protein catabolic process",
+  UPR             = "endoplasmic reticulum unfolded protein response"
+)
+```
+
+*Step-by-Step Breakdown*
+
+`kegg_targets <- c(...)`
+
+Constructs a named character vector where each name (e.g., "Glutathione") is a short label used for faceting or annotation, and each value is the exact KEGG pathway string to match in your enrichment results.
+
+`reactome_targets <- c(...)`
+
+Similarly creates a named vector of key Reactome pathways of interest, mapping concise labels ("DetoxROS", "ERAD", etc.) to full pathway names for subsetting.
+
+`go_targets <- c(...)`
+
+Defines a named vector of GO Biological Process terms, pairing simple labels with their corresponding GO descriptions for focused plotting.
+
+*Key Packages*
+
+Vectors will be used downstream with packages like dplyr and ggplot2 to filter enrichment result objects and generate facetted visualizations.)
+
+---
+
+## SECTION 11: Function to Create Individual Zoom-In Plots with Expanded Thresholds
+
+*Purpose*
+
+- Define function to extract genes from a specific enriched pathway, filter them by an adjusted-p threshold, assign significance stars, and generate a horizontal bar plot of their log2 fold-changes with clear annotations.
+
+```{r}
+# ---- 11. Function to create individual zoom-in plots with expanded thresholds ----
+create_zoom_in_plot <- function(enrichment, pathway_name, target_description, contrast, db_name, max_genes = 10) {
+  # 1. Locate the exact pathway description; fall back to grep if needed
+  idx <- which(enrichment$Description == target_description)
+  if (length(idx) == 0) idx <- grep(target_description, enrichment$Description, ignore.case = TRUE)
+  if (length(idx) == 0) return(NULL)  # No matching pathway
+  
+  # 2. Split the geneID field (Entrez IDs separated by "/") into a vector
+  genes   <- str_split(enrichment$geneID[idx[1]], "/")[[1]]
+  # 3. Map Entrez IDs back to gene symbols via the entrez_map lookup
+  symbols <- entrez_map$SYMBOL[match(genes, entrez_map$ENTREZID)]
+  
+  # 4. Build a data frame of gene stats, filtering by adjusted p ≤ 0.20
+  plot_data <- gene_stats %>%
+    filter(
+      Gene_Symbol %in% symbols,
+      .data[[paste0("adj_", contrast)]] <= 0.20
+    ) %>%
+    transmute(
+      Gene_Symbol,  # Keep the gene symbol
+      value       = .data[[paste0("log2FC_", contrast)]],  # Corresponding log2FC
+      star        = case_when(  # Significance stars
+        .data[[paste0("adj_", contrast)]] < 0.001 ~ "***",
+        .data[[paste0("adj_", contrast)]] < 0.01  ~ "**",
+        .data[[paste0("adj_", contrast)]] < 0.05  ~ "*",
+        .data[[paste0("adj_", contrast)]] < 0.10  ~ ".",
+        TRUE                                      ~ ""
+      ),
+      significance = case_when(  # Categorical significance labels
+        .data[[paste0("adj_", contrast)]] < 0.05  ~ "Significant",
+        .data[[paste0("adj_", contrast)]] < 0.10  ~ "Near Significant",
+        .data[[paste0("adj_", contrast)]] < 0.20  ~ "Marginally Significant",
+        TRUE                                      ~ "Not Significant"
+      )
+    ) %>%
+    arrange(desc(value)) %>%  # Sort by descending log2FC
+    head(max_genes)           # Keep only top N genes
+  
+  if (nrow(plot_data) == 0) return(NULL)  # Nothing to plot
+  
+  # 5. Generate and print the ggplot
+  print(
+    ggplot(plot_data, aes(x = reorder(Gene_Symbol, value), y = value, fill = significance)) +
+      geom_col(show.legend = TRUE) +  # Bar plot of log2FC
+      geom_text(
+        aes(label = star),
+        hjust = -0.3, size = 5, fontface = "bold"
+      ) +  # Add stars just outside the bars
+      coord_flip() +  # Horizontal bars
+      scale_fill_manual(values = c(  # Custom fill colors
+        "Significant"         = "#D55E00",
+        "Near Significant"    = "#F0E442",
+        "Marginally Significant" = "#009E73",
+        "Not Significant"     = "#C0C0C0"
+      )) +
+      labs(
+        title    = paste(db_name, "Pathway:", pathway_name, "(", contrast, ")"),
+        subtitle = paste(
+          "Pathway:", target_description,
+          "\nSignificance: *** p<0.001, ** p<0.01, * p<0.05, . p<0.10, marginal p<0.20"
+        ),
+        x        = "Gene Symbol",
+        y        = paste0("log₂ Fold Change (", contrast, ")"),
+        caption  = "Bars = log2FC; color = adjusted-p significance."
+      ) +
+      theme_minimal(base_size = 14) +  # Clean theme
+      theme(
+        plot.title    = element_text(face = "bold", size = 16),
+        plot.subtitle = element_text(size = 14, margin = margin(b = 10)),
+        axis.text.y   = element_text(size = 12),
+        axis.text.x   = element_text(size = 12),
+        axis.title    = element_text(size = 14, face = "bold"),
+        plot.caption  = element_text(size = 10, face = "italic"),
+        legend.title  = element_text(size = 12),
+        legend.text   = element_text(size = 12)
+      )
+  )
+}
+```
+
+*Step-by-Step Breakdown*
+
+1. Locate pathway index
+
+- Uses `which()` for exact match on Description; if none found, falls back to `grep()` ignoring case; returns `NULL`` if still not found.
+
+2. Extract gene list
+
+- Splits the /-separated geneID string into individual Entrez IDs using stringr’s `str_split()`, then maps them back to `Gene_Symbol` via the entrez_map lookup table.
+
+3. Filter and annotate
+
+  - Filters `gene_stats` to genes in the pathway whose adjusted p-value for the given contrast is ≤ 0.20.
+
+  - Uses `transmute()` to:
+
+  - Pull out `Gene_Symbol` and the appropriate `log2FC_*` value.
+
+  - Create `star`, a string of significance asterisks based on adjusted-p thresholds.
+
+  - Create `significance`, a categorical label (“Significant,” “Near Significant,” etc.).
+
+4. Sort and limit
+
+Orders by descending value (log2FC) and retains only the top `max_genes`.
+
+5. Plotting
+
+  - Constructs a horizontal bar plot `(geom_col() + coord_flip())`.
+
+  - Overlays significance stars with `geom_text()`, just outside each bar.
+
+  - Applies `scale_fill_manual()` to assign distinct colors to each `significance` category.
+
+  - Adds descriptive titles, subtitles, axis labels, and a caption via `labs()`.
+
+  - Applies a minimalist theme and customizes text sizes and styles with `theme()`.
+
+*Key Packages*
+
+dplyr: Data manipulation (filter(), transmute(), arrange(), head()), piping, and use of the .data pronoun.
+
+stringr: String splitting (str_split()) for processing the geneID field.
+
+ggplot2: Plot construction and customization (ggplot(), geom_col(), geom_text(), coord_flip(), scale_fill_manual(), labs(), theme_minimal(), theme()).
+
+rlang: Enables the use of .data[[...]] for programmatic column access within dplyr pipelines.
+
+---
+
+## SECTION 12: 
+
+*Purpose*
+
+- Loop over defined contrasts (aging) and key pathway sets (KEGG, Reactome, GO), retrieve the corresponding enrichment results, and invokes the `create_zoom_in_plot()` function to produce focused bar plots for each pathway.
+
+```{r}
+# ---- 12. Generate plots for each database and contrast ----
+
+# Define the contrasts to iterate over: aging (Pre_vs_Young), *could use and alter for other comparisons, but keeping it simple for now*
+contrasts <- c("Pre_vs_Young")
+
+# KEGG pathways: for each contrast and each target pathway, generate a zoom-in plot
+for (contrast in contrasts) {
+  for (pathway_name in names(kegg_targets)) {
+    # Retrieve the KEGG enrichment result object for this contrast
+    enrichment <- enrichment_results[[paste0("KEGG_", contrast)]]
+    # Produce the bar plot for this pathway
+    create_zoom_in_plot(
+      enrichment,
+      pathway_name,
+      kegg_targets[[pathway_name]],
+      contrast,
+      db_name   = "KEGG",
+      max_genes = 20
+    )
+  }
+}
+
+# Reactome pathways: same logic as KEGG but using Reactome target list
+for (contrast in contrasts) {
+  for (pathway_name in names(reactome_targets)) {
+    enrichment <- enrichment_results[[paste0("Reactome_", contrast)]]
+    create_zoom_in_plot(
+      enrichment,
+      pathway_name,
+      reactome_targets[[pathway_name]],
+      contrast,
+      db_name   = "Reactome",
+      max_genes = 20
+    )
+  }
+}
+
+# GO Biological Process pathways: loop over GO targets
+for (contrast in contrasts) {
+  for (pathway_name in names(go_targets)) {
+    enrichment <- enrichment_results[[paste0("GO_", contrast)]]
+    create_zoom_in_plot(
+      enrichment,
+      pathway_name,
+      go_targets[[pathway_name]],
+      contrast,
+      db_name   = "GO",
+      max_genes = 20
+    )
+  }
+}
+```
+
+*Step-by-Step Breakdown*
+
+`contrasts <- c("Pre_vs_Young", ...)`
+
+Defines a character vector of the comparisons to analyze: aging (“Pre_vs_Young”) or possibly training response (“Post_vs_Pre_MA”) in the future.
+
+`for (contrast in contrasts) { … }`
+
+Outer loop: iterates over each contrast string.
+
+`for (pathway_name in names(kegg_targets)) { … }`
+
+Inner loop: iterates over the named elements of the kegg_targets vector, so you handle each pathway label (“Glutathione”, “Proteasome”, etc.).
+
+`enrichment <- enrichment_results[[paste0("KEGG_", contrast)]]`
+
+Dynamically constructs the list name (e.g., “KEGG_Pre_vs_Young”) and extracts that enrichment result object from enrichment_results.
+
+5. `create_zoom_in_plot(enrichment, pathway_name, kegg_targets[[pathway_name]], contrast, "KEGG", max_genes = 20)`
+
+- Calls the previously defined plotting function, passing:
+
+  - `enrichment`: the enrichment object,
+
+  - `pathway_name`: the short label,
+
+  - `kegg_targets[[pathway_name]]`: the full pathway description,
+
+  - `contrast`: which log₂FC column and p-values to use,
+
+  - `"KEGG"`: the database name for titles,
+
+  - `max_genes = 20`: cap at 20 genes per plot.
+
+6. Repeat for Reactome and GO
+
+Uses the same looping structure and function call, simply swapping in `reactome_targets`/`GO_targets` and the appropriate prefix in `enrichment_results` (e.g., “Reactome_Post_vs_Pre_MA”).
+
+*Key Packages*
+
+base R: Provides loop constructs (for), vector creation (c()), string concatenation (paste0()), list indexing ([[ ]]), and name retrieval (names()).
+
+ggplot2, dplyr, stringr, rlang: Employed indirectly by create_zoom_in_plot() for data manipulation, filtering, and plotting, enabling the generation of the annotated bar charts.

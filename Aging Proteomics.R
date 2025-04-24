@@ -239,7 +239,7 @@ go_targets <- c(
   UPR = "endoplasmic reticulum unfolded protein response"
 )
 
-# Function to create individual zoom-in plots with expanded thresholds
+# ---- 11.Function to create individual zoom-in plots with expanded thresholds
 create_zoom_in_plot <- function(enrichment, pathway_name, target_description, contrast, db_name, max_genes = 10) {
   idx <- which(enrichment$Description == target_description)
   if (length(idx) == 0) idx <- grep(target_description, enrichment$Description, ignore.case = TRUE)
@@ -307,7 +307,7 @@ create_zoom_in_plot <- function(enrichment, pathway_name, target_description, co
   )
 }
 
-# Generate plots for each database and contrast
+# ---- 12. Generate plots for each database and contrast
 contrasts <- c("Pre_vs_Young", "Post_vs_Pre_MA") # Aging and training contrasts
 
 # KEGG
