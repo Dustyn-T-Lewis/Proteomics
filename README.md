@@ -39,7 +39,7 @@ This repository contains the R Markdown analysis pipeline for processing, analyz
 │   ├── Reactome_Pre_vs_Young_Results.csv  # Reactome pathway enrichment results
 │   ├── Aging-Proteomics.html     # HTML report
 │   ├── Aging-Proteomics.md       # Markdown report
-├── figures/ 
+├── figures 
 |   ├── Pathway plots             # Figures and plots
 │   └── zoom_in_plots
 ```
