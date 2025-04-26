@@ -22,7 +22,7 @@ invisible(lapply(required_packages, library, character.only = TRUE))
 
 # ---- 1. Load & Clean Data ----
 # Load data from Excel, remove NA rows/columns, and extract gene/protein details
-sarco <- read_excel("13_MASTER_SEER proteome analysis (4-4-23).xlsx", sheet = "MASTER_SARCO_data") %>%
+sarco <- read_excel("data/13_MASTER_SEER proteome analysis (4-4-23).xlsx", sheet = "MASTER_SARCO_data") %>%
   dplyr::select(where(~ any(!is.na(.)))) %>%
   filter(if_any(everything(), ~ !is.na(.))) %>%
   mutate(
